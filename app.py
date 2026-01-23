@@ -514,7 +514,7 @@ if search_input:
                 insider_delta_display = f"{buy_count} Buys vs {sell_count} Sells"
         except: pass
 
-        # --- DIVIDENDS & PAYOUT FIX (PRIORITY: TTM INFO -> DF -> GAAP) ---
+        # --- DIVIDENDS & PAYOUT ---
         cagr_3, cagr_5 = 0, 0
         annual_divs = pd.Series()
         series_divs_history = None
@@ -530,29 +530,48 @@ if search_input:
             if len(clean_divs) >= 4: cagr_3 = calculate_cagr(clean_divs.iloc[-4], clean_divs.iloc[-1], 3) * 100
             if len(clean_divs) >= 6: cagr_5 = calculate_cagr(clean_divs.iloc[-6], clean_divs.iloc[-1], 5) * 100
             
-            # --- ROBUST PAYOUT CALCULATION (PRIORITY INVERSION) ---
-            # Priority 1: TTM FCF (Live Data) - Best for Non-REITs (KO, etc)
+            # --- SUPER ROBUST PAYOUT CALCULATION (MANUAL CONSTRUCTION) ---
+            # Try to build TTM FCF manually from quarterly cashflow
             try:
-                ttm_fcf = safe_get(info, 'freeCashFlow')
-                div_rate = safe_get(info, 'dividendRate')
-                shares = safe_get(info, 'sharesOutstanding')
-                if ttm_fcf and ttm_fcf > 0 and div_rate and div_rate > 0 and shares:
-                    est_total_divs = div_rate * shares
-                    fcf_payout_ratio = (est_total_divs / ttm_fcf) * 100
+                # 1. Fetch Quarterly Cashflow
+                q_cashflow = stock.quarterly_cashflow
+                if q_cashflow is not None and not q_cashflow.empty:
+                    # Get OCF line
+                    line_ocf = find_line(q_cashflow, ['operating cash flow', 'total cash from operating activities'])
+                    # Get Capex line
+                    line_capex = find_line(q_cashflow, ['capital expenditure', 'purchase of ppe'])
+                    
+                    if line_ocf is not None:
+                        # Sum last 4 quarters
+                        ttm_ocf = line_ocf.iloc[:4].sum()
+                        
+                        ttm_capex = 0
+                        if line_capex is not None:
+                            ttm_capex = line_capex.iloc[:4].sum() # Capex is usually negative
+                        
+                        # FCF = OCF + Capex (if capex is negative)
+                        manual_ttm_fcf = ttm_ocf + ttm_capex
+                        
+                        # Get Dividends Paid TTM
+                        # Estimate via rate * shares (most accurate for forward looking)
+                        div_rate = safe_get(info, 'dividendRate')
+                        shares = safe_get(info, 'sharesOutstanding')
+                        
+                        if manual_ttm_fcf > 0 and div_rate > 0 and shares > 0:
+                            total_div_est = div_rate * shares
+                            fcf_payout_ratio = (total_div_est / manual_ttm_fcf) * 100
             except: pass
 
-            # Priority 2: Annual DF (Backup if TTM fails)
+            # Fallback 2: Info TTM (if manual failed)
             if fcf_payout_ratio is None:
-                if h_divs_paid is not None and h_ocf is not None:
-                    last_divs_total = abs(h_divs_paid.iloc[-1]) 
-                    last_ocf_total = h_ocf.iloc[-1]
-                    denominator = 0
-                    if is_reit: denominator = last_ocf_total
-                    else:
-                        if h_capex is not None: denominator = last_ocf_total + h_capex.iloc[-1]
-                        else: denominator = last_ocf_total
-                    
-                    if denominator > 0: fcf_payout_ratio = (last_divs_total / denominator) * 100
+                try:
+                    ttm_fcf = safe_get(info, 'freeCashFlow')
+                    div_rate = safe_get(info, 'dividendRate')
+                    shares = safe_get(info, 'sharesOutstanding')
+                    if ttm_fcf > 0 and div_rate > 0 and shares > 0:
+                        total_div_est = div_rate * shares
+                        fcf_payout_ratio = (total_div_est / ttm_fcf) * 100
+                except: pass
 
         series_yield_history = None
         hist_price = stock.history(period="10y")
@@ -585,8 +604,8 @@ if search_input:
         final_payout_val = 0
 
         if has_dividends:
-            final_payout_label = "Payout (FCF)"
-            final_payout_help = "Dividends / Free Cash Flow. Shows the real cash safety."
+            final_payout_label = "Payout (FCF-TTM)"
+            final_payout_help = "Dividends / Free Cash Flow (Trailing 12 Months). Shows the real cash safety."
             
             # Use calculated FCF Payout if valid, else fallback to GAAP
             if fcf_payout_ratio is not None and 0 < fcf_payout_ratio < 500:
