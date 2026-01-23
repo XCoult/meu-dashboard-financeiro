@@ -44,14 +44,16 @@ st.markdown("""
     
     .welcome-container { text-align: center; margin-top: 50px; color: #666; }
     
-    /* NEW MOAT CARDS STYLING */
+    /* MOAT CARDS STYLING */
     .moat-container {
         display: flex;
         gap: 10px;
         margin-bottom: 20px;
+        flex-wrap: wrap;
     }
     .moat-card {
         flex: 1;
+        min-width: 140px;
         background-color: #f8f9fa;
         padding: 15px;
         border-radius: 8px;
@@ -59,8 +61,8 @@ st.markdown("""
         border: 1px solid #e0e0e0;
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    .moat-label { font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
-    .moat-value { font-size: 1.2rem; font-weight: 700; color: #333; }
+    .moat-label { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+    .moat-value { font-size: 1.1rem; font-weight: 700; color: #333; }
     .moat-good { border-top: 4px solid #28a745; }
     .moat-avg { border-top: 4px solid #ffc107; }
     .moat-bad { border-top: 4px solid #dc3545; }
@@ -512,7 +514,7 @@ if search_input:
                 insider_delta_display = f"{buy_count} Buys vs {sell_count} Sells"
         except: pass
 
-        # --- DIVIDENDS & PAYOUT FIX (Cash Flow Based) ---
+        # --- DIVIDENDS & PAYOUT FIX (PRIORITY: INFO TTM -> DF -> GAAP) ---
         cagr_3, cagr_5 = 0, 0
         annual_divs = pd.Series()
         series_divs_history = None
@@ -528,8 +530,22 @@ if search_input:
             if len(clean_divs) >= 4: cagr_3 = calculate_cagr(clean_divs.iloc[-4], clean_divs.iloc[-1], 3) * 100
             if len(clean_divs) >= 6: cagr_5 = calculate_cagr(clean_divs.iloc[-6], clean_divs.iloc[-1], 5) * 100
             
-            # --- ROBUST PAYOUT LOGIC ---
-            # 1. Try DataFrame Annual Data
+            # --- ROBUST PAYOUT CALCULATION ---
+            # Strategy:
+            # 1. Calculate Payout via INFO (TTM FCF & Div Rate) -> Best for Non-REITs like KO
+            # 2. Calculate Payout via DF (Annual Data) -> Best for REITs (OCF based) or fallback
+            
+            payout_via_info = None
+            try:
+                ttm_fcf = safe_get(info, 'freeCashFlow')
+                div_rate = safe_get(info, 'dividendRate')
+                shares = safe_get(info, 'sharesOutstanding')
+                if ttm_fcf > 0 and div_rate > 0 and shares > 0:
+                    total_div_est = div_rate * shares
+                    payout_via_info = (total_div_est / ttm_fcf) * 100
+            except: pass
+
+            payout_via_df = None
             if h_divs_paid is not None and h_ocf is not None:
                 last_divs_total = abs(h_divs_paid.iloc[-1]) 
                 last_ocf_total = h_ocf.iloc[-1]
@@ -539,19 +555,17 @@ if search_input:
                     if h_capex is not None: denominator = last_ocf_total + h_capex.iloc[-1]
                     else: denominator = last_ocf_total
                 
-                if denominator > 0: fcf_payout_ratio = (last_divs_total / denominator) * 100
+                if denominator > 0: payout_via_df = (last_divs_total / denominator) * 100
             
-            # 2. If Failed (NaN or 0), Try TTM Data from INFO (Backup for KO/Stocks with missing annual lines)
-            if fcf_payout_ratio is None or fcf_payout_ratio == 0 or fcf_payout_ratio > 500:
-                try:
-                    ttm_fcf = safe_get(info, 'freeCashFlow')
-                    # Calc Total Divs Paid TTM approx
-                    div_rate = safe_get(info, 'dividendRate')
-                    shares = safe_get(info, 'sharesOutstanding')
-                    if ttm_fcf > 0 and div_rate > 0 and shares > 0:
-                        total_div_est = div_rate * shares
-                        fcf_payout_ratio = (total_div_est / ttm_fcf) * 100
-                except: pass
+            # Decision Logic
+            if is_reit:
+                # For REITs, DF (OCF based) is usually better than 'freeCashFlow' from info
+                if payout_via_df: fcf_payout_ratio = payout_via_df
+                elif payout_via_info: fcf_payout_ratio = payout_via_info
+            else:
+                # For Normal Companies (KO), INFO (TTM) is usually better/fresher
+                if payout_via_info: fcf_payout_ratio = payout_via_info
+                elif payout_via_df: fcf_payout_ratio = payout_via_df
 
         series_yield_history = None
         hist_price = stock.history(period="10y")
@@ -580,17 +594,18 @@ if search_input:
         m1, m2, m3 = st.columns(3)
         m1.metric("Price", f"${price_curr}")
         
+        # Variable to store final payout for summary
+        final_payout_val = 0
+
         if has_dividends:
-            # Decide which payout to show
-            final_payout_val = 0
             final_payout_label = "Payout (FCF)"
             final_payout_help = "Dividends / Free Cash Flow. Shows the real cash safety."
             
-            if fcf_payout_ratio is not None and fcf_payout_ratio > 0:
+            if fcf_payout_ratio is not None and 0 < fcf_payout_ratio < 500:
                 final_payout_val = fcf_payout_ratio
                 if is_reit: final_payout_label = "Payout (Est. AFFO)"
             else:
-                final_payout_val = safe_get(info, 'payoutRatio') * 100 # Fallback to GAAP
+                final_payout_val = safe_get(info, 'payoutRatio') * 100
                 final_payout_label = "Payout (GAAP)"
                 final_payout_help = "Earnings payout (Less reliable than FCF)."
 
@@ -851,10 +866,9 @@ if search_input:
         
         # 5. DIVIDEND
         if has_dividends:
-            # Use final calculated Payout
             p_limit = 90 if is_reit else 75
             
-            # Use the calculated variable final_payout_val from earlier
+            # Use calculated final_payout_val
             if final_payout_val < p_limit: bull_points.append(f"**Safe Dividend:** Cash Payout Ratio is {round(final_payout_val, 1)}% (Well covered).")
             else: bear_points.append(f"**Dividend Pressure:** Cash Payout Ratio is {round(final_payout_val, 1)}% (High).")
             
