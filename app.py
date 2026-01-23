@@ -42,14 +42,28 @@ st.markdown("""
         margin-top: 10px;
     }
     
-    .moat-box {
-        background-color: #e8f4f8;
-        border-left: 5px solid #0077b6;
-        padding: 15px;
-        border-radius: 5px;
+    .welcome-container { text-align: center; margin-top: 50px; color: #666; }
+    
+    /* NEW MOAT CARDS STYLING */
+    .moat-container {
+        display: flex;
+        gap: 10px;
         margin-bottom: 20px;
-        color: #333;
     }
+    .moat-card {
+        flex: 1;
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .moat-label { font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+    .moat-value { font-size: 1.2rem; font-weight: 700; color: #333; }
+    .moat-good { border-top: 4px solid #28a745; }
+    .moat-avg { border-top: 4px solid #ffc107; }
+    .moat-bad { border-top: 4px solid #dc3545; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -98,7 +112,8 @@ def get_metric_status(value, is_reit, metric_type):
     if value is None: return None, "off"
     
     if metric_type == 'payout':
-        limit_good = 90 if is_reit else 65
+        # Now based on FCF for everyone
+        limit_good = 90 if is_reit else 75 
         limit_bad = 100 if is_reit else 90
         if value < limit_good: return "Safe", "normal"
         elif value > limit_bad: return "High", "inverse"
@@ -113,7 +128,7 @@ def get_metric_status(value, is_reit, metric_type):
 
     elif metric_type == 'int_cov':
         limit_bad = 1.5
-        limit_good = 2.0
+        limit_good = 3.0
         if value > limit_good: return "Safe", "normal"
         elif value < limit_bad: return "Critical", "inverse"
         else: return "Tight", "off"
@@ -140,6 +155,11 @@ def get_metric_status(value, is_reit, metric_type):
         if value < 0.8: return "Defensive", "normal"
         elif value > 1.3: return "Volatile", "inverse"
         else: return "Market", "off"
+    
+    elif metric_type == 'moat_score':
+        if value >= 3: return "Wide Moat", "normal"
+        elif value == 2: return "Narrow Moat", "off"
+        else: return "No Moat", "inverse"
 
     return None, "off"
 
@@ -278,13 +298,16 @@ def create_insider_chart(transactions):
 st.title("📊 Paulo Moura Dashboard")
 col_input, col_btn = st.columns([4, 1]) 
 with col_input:
-    search_input = st.text_input("Ticker or Company Name", value="Realty Income").strip()
+    search_input = st.text_input("Ticker or Company Name", value="").strip()
 with col_btn:
     st.write("") 
     st.write("") 
     search = st.button("🔍 Search") 
 
 # --- MAIN LOGIC ---
+if not search_input:
+    st.markdown("<div class='welcome-container'><h3>👋 Welcome!</h3><p>Enter a stock ticker (e.g., <b>O</b>, <b>AAPL</b>) or company name to start analyzing.</p></div>", unsafe_allow_html=True)
+
 if search_input:
     ticker = search_input.upper()
     if " " in ticker or len(ticker) > 5:
@@ -322,7 +345,7 @@ if search_input:
 
         df_calc = align_annual_data({'NI': h_net_income, 'DEPR': h_depr, 'CAPEX': h_capex, 'SHARES': h_shares, 'OCF': h_ocf})
         series_affo_share = None
-        affo_payout_ratio = None
+        fcf_payout_ratio = None
         
         # REIT & DIVIDEND Detection
         is_reit = False
@@ -339,13 +362,16 @@ if search_input:
             for col in ['NI', 'DEPR', 'CAPEX', 'OCF']: 
                 if col not in df_calc.columns: df_calc[col] = 0
             
+            # --- UNIVERSAL CASH METRIC (FCF or AFFO) ---
             if is_reit:
+                # For REITs, OCF is often the best proxy for AFFO available freely
                 if df_calc['OCF'].sum() != 0:
                     df_calc['Cash_Metric'] = df_calc['OCF']
                 else:
                     df_calc['Cash_Metric'] = df_calc['NI'].fillna(0) + df_calc['DEPR'].fillna(0)
             else:
-                df_calc['Cash_Metric'] = df_calc['NI'].fillna(0) + df_calc['DEPR'].fillna(0) + df_calc['CAPEX'].fillna(0)
+                # For Normal Stocks, FCF = OCF + CAPEX (Capex is negative)
+                df_calc['Cash_Metric'] = df_calc['OCF'].fillna(0) + df_calc['CAPEX'].fillna(0)
 
             if 'SHARES' in df_calc.columns:
                 df_calc['SHARES'] = df_calc['SHARES'].replace(0, 1)
@@ -402,40 +428,47 @@ if search_input:
         beta_val = safe_get(info, 'beta')
 
         # --- MOAT CALCULATION ---
-        # 1. ROIC > 15 (Efficiency)
-        # 2. Gross Margin > 40 (Pricing Power)
-        # 3. Net Margin > 15 (Profitability)
-        # 4. Market Cap > 100B (Dominance)
         moat_score = 0
-        moat_details = []
+        moat_data = [] # (Name, Value, Class)
         
+        # 1. Efficiency
         if roic_val > 15: 
             moat_score += 1
-            moat_details.append(f"High Capital Efficiency (ROIC {round(roic_val, 1)}%)")
+            moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-good"))
+        elif roic_val > 8:
+            moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-avg"))
         else:
-            moat_details.append(f"Average Efficiency (ROIC {round(roic_val, 1)}%)")
+            moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-bad"))
             
+        # 2. Pricing Power
         gm_val_last = series_gross_margin.iloc[-1] if series_gross_margin is not None else 0
         if gm_val_last > 40: 
             moat_score += 1
-            moat_details.append(f"Strong Pricing Power (Gross Margin {round(gm_val_last, 1)}%)")
+            moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-good"))
+        elif gm_val_last > 20:
+            moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-avg"))
         else:
-            moat_details.append(f"Standard Margins (Gross Margin {round(gm_val_last, 1)}%)")
+            moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-bad"))
             
+        # 3. Profitability
         pm_val_calc = safe_get(info, 'profitMargins') * 100
         if pm_val_calc > 15: 
             moat_score += 1
-            moat_details.append(f"High Profitability (Net Margin {round(pm_val_calc, 1)}%)")
+            moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-good"))
+        elif pm_val_calc > 5:
+            moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-avg"))
+        else:
+            moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-bad"))
         
+        # 4. Scale
         mkt_cap = safe_get(info, 'marketCap')
         if mkt_cap > 100_000_000_000: 
             moat_score += 1
-            moat_details.append("Dominant Scale (Large Cap Leader)")
-
-        moat_rating = "No Moat"
-        if moat_score >= 3: moat_rating = "Wide Moat 🏰"
-        elif moat_score == 2: moat_rating = "Narrow Moat 🛡️"
-        else: moat_rating = "No Moat 🚧"
+            moat_data.append(("Scale", "Mega Cap", "moat-good"))
+        elif mkt_cap > 10_000_000_000:
+            moat_data.append(("Scale", "Large Cap", "moat-avg"))
+        else:
+            moat_data.append(("Scale", "Mid/Small", "moat-avg"))
 
         # --- INSIDER ---
         insider_label = "Neutral"
@@ -479,7 +512,7 @@ if search_input:
                 insider_delta_display = f"{buy_count} Buys vs {sell_count} Sells"
         except: pass
 
-        # --- DIVIDENDS & PAYOUT ---
+        # --- DIVIDENDS & PAYOUT FIX (Cash Flow Based) ---
         cagr_3, cagr_5 = 0, 0
         annual_divs = pd.Series()
         series_divs_history = None
@@ -495,18 +528,30 @@ if search_input:
             if len(clean_divs) >= 4: cagr_3 = calculate_cagr(clean_divs.iloc[-4], clean_divs.iloc[-1], 3) * 100
             if len(clean_divs) >= 6: cagr_5 = calculate_cagr(clean_divs.iloc[-6], clean_divs.iloc[-1], 5) * 100
             
+            # --- ROBUST PAYOUT LOGIC ---
+            # 1. Try DataFrame Annual Data
             if h_divs_paid is not None and h_ocf is not None:
                 last_divs_total = abs(h_divs_paid.iloc[-1]) 
                 last_ocf_total = h_ocf.iloc[-1]
-                if last_ocf_total > 0:
-                    if is_reit:
-                        affo_payout_ratio = (last_divs_total / last_ocf_total) * 100
-                    else:
-                        if h_capex is not None:
-                            last_capex = h_capex.iloc[-1]
-                            last_fcf_total = last_ocf_total + last_capex
-                            if last_fcf_total > 0:
-                                affo_payout_ratio = (last_divs_total / last_fcf_total) * 100
+                denominator = 0
+                if is_reit: denominator = last_ocf_total
+                else:
+                    if h_capex is not None: denominator = last_ocf_total + h_capex.iloc[-1]
+                    else: denominator = last_ocf_total
+                
+                if denominator > 0: fcf_payout_ratio = (last_divs_total / denominator) * 100
+            
+            # 2. If Failed (NaN or 0), Try TTM Data from INFO (Backup for KO/Stocks with missing annual lines)
+            if fcf_payout_ratio is None or fcf_payout_ratio == 0 or fcf_payout_ratio > 500:
+                try:
+                    ttm_fcf = safe_get(info, 'freeCashFlow')
+                    # Calc Total Divs Paid TTM approx
+                    div_rate = safe_get(info, 'dividendRate')
+                    shares = safe_get(info, 'sharesOutstanding')
+                    if ttm_fcf > 0 and div_rate > 0 and shares > 0:
+                        total_div_est = div_rate * shares
+                        fcf_payout_ratio = (total_div_est / ttm_fcf) * 100
+                except: pass
 
         series_yield_history = None
         hist_price = stock.history(period="10y")
@@ -531,22 +576,28 @@ if search_input:
         price_curr = safe_get(info, 'currentPrice')
         div_rate_val = safe_get(info, 'dividendRate')
         div_yield_val = (div_rate_val / price_curr * 100) if (price_curr and price_curr > 0) else 0
-        payout_gaap = safe_get(info, 'payoutRatio') * 100
         
         m1, m2, m3 = st.columns(3)
         m1.metric("Price", f"${price_curr}")
         
         if has_dividends:
-            p_label, p_val, p_help = "Payout (GAAP)", payout_gaap, "Earnings payout. Ideal: < 60%."
-            if is_reit:
-                if affo_payout_ratio is not None:
-                    p_label, p_val, p_help = "Payout (Est. AFFO)", affo_payout_ratio, "Est. AFFO Payout (Based on Op. Cash Flow). Ideal: < 90%."
-            elif affo_payout_ratio is not None and payout_gaap > 150:
-                 p_label, p_val, p_help = "Payout (FCF)", affo_payout_ratio, "Free Cash Flow Payout. Ideal: < 70%."
+            # Decide which payout to show
+            final_payout_val = 0
+            final_payout_label = "Payout (FCF)"
+            final_payout_help = "Dividends / Free Cash Flow. Shows the real cash safety."
             
-            p_txt, p_col = get_metric_status(p_val, is_reit, 'payout')
+            if fcf_payout_ratio is not None and fcf_payout_ratio > 0:
+                final_payout_val = fcf_payout_ratio
+                if is_reit: final_payout_label = "Payout (Est. AFFO)"
+            else:
+                final_payout_val = safe_get(info, 'payoutRatio') * 100 # Fallback to GAAP
+                final_payout_label = "Payout (GAAP)"
+                final_payout_help = "Earnings payout (Less reliable than FCF)."
+
+            p_txt, p_col = get_metric_status(final_payout_val, is_reit, 'payout')
+            
             m2.metric("Yield", f"{round(div_yield_val, 2)}%")
-            m3.metric(p_label, f"{round(p_val, 1)}%", p_txt, delta_color=p_col, help=p_help)
+            m3.metric(final_payout_label, f"{round(final_payout_val, 1)}%", p_txt, delta_color=p_col, help=final_payout_help)
         else:
             mkt_cap = safe_get(info, 'marketCap')
             m2.metric("Market Cap", format_large_number(mkt_cap))
@@ -702,6 +753,20 @@ if search_input:
                          p_fcf_display = f"{round(val_pfcf, 1)}"
                  
                  st.metric("P/FCF", p_fcf_display, help="Price vs Free Cash Flow per Share. Ideal: < 15.")
+             
+             st.write("")
+             # VISUAL MOAT CARDS
+             st.markdown("##### 🏰 Competitive Advantage (Moat)")
+             
+             moat_html = f"""
+             <div class="moat-container">
+                <div class="moat-card {moat_data[0][2]}"><div class="moat-label">{moat_data[0][0]}</div><div class="moat-value">{moat_data[0][1]}</div></div>
+                <div class="moat-card {moat_data[1][2]}"><div class="moat-label">{moat_data[1][0]}</div><div class="moat-value">{moat_data[1][1]}</div></div>
+                <div class="moat-card {moat_data[2][2]}"><div class="moat-label">{moat_data[2][0]}</div><div class="moat-value">{moat_data[2][1]}</div></div>
+                <div class="moat-card {moat_data[3][2]}"><div class="moat-label">{moat_data[3][0]}</div><div class="moat-value">{moat_data[3][1]}</div></div>
+             </div>
+             """
+             st.markdown(moat_html, unsafe_allow_html=True)
 
         st.divider()
 
@@ -762,17 +827,6 @@ if search_input:
         st.write("")
         st.markdown("### 🤖 Automated Analysis")
         
-        # MOAT BOX
-        st.markdown(f"""
-        <div class='moat-box'>
-            <strong>🏰 Economic Moat Rating: {moat_rating}</strong><br>
-            <span style='font-size:0.9rem; color:#555;'>Analysis based on 4 pillars of competitive advantage:</span><br>
-            <ul style='margin-bottom:0; padding-left:20px; margin-top:5px;'>
-                {''.join([f'<li>{d}</li>' for d in moat_details])}
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-        
         bull_points = []
         bear_points = []
         
@@ -795,11 +849,14 @@ if search_input:
         if nd_ebitda_val < d_limit: bull_points.append(f"**Solid Balance Sheet:** Net Debt/EBITDA is safe at {round(nd_ebitda_val, 1)}x.")
         else: bear_points.append(f"**Leverage Risk:** Net Debt/EBITDA is elevated at {round(nd_ebitda_val, 1)}x.")
         
-        # 5. DIVIDEND (If Applicable)
+        # 5. DIVIDEND
         if has_dividends:
-            p_limit = 90 if is_reit else 65
-            if affo_payout_ratio and affo_payout_ratio < p_limit: bull_points.append(f"**Safe Dividend:** Payout Ratio is {round(affo_payout_ratio, 1)}% (Well covered).")
-            else: bear_points.append(f"**Tight Dividend:** Payout Ratio is {round(affo_payout_ratio, 1) if affo_payout_ratio else 'N/A'}% (High).")
+            # Use final calculated Payout
+            p_limit = 90 if is_reit else 75
+            
+            # Use the calculated variable final_payout_val from earlier
+            if final_payout_val < p_limit: bull_points.append(f"**Safe Dividend:** Cash Payout Ratio is {round(final_payout_val, 1)}% (Well covered).")
+            else: bear_points.append(f"**Dividend Pressure:** Cash Payout Ratio is {round(final_payout_val, 1)}% (High).")
             
             c_limit = 8 if is_reit else 12
             if (div_yield_val + cagr_5) > c_limit: bull_points.append(f"**Chowder Check Passed:** Attractive Yield + Growth combo.")
