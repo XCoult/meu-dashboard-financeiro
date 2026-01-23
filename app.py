@@ -514,7 +514,7 @@ if search_input:
                 insider_delta_display = f"{buy_count} Buys vs {sell_count} Sells"
         except: pass
 
-        # --- DIVIDENDS & PAYOUT FIX (PRIORITY: INFO TTM -> DF -> GAAP) ---
+        # --- DIVIDENDS & PAYOUT FIX (PRIORITY: TTM INFO -> DF -> GAAP) ---
         cagr_3, cagr_5 = 0, 0
         annual_divs = pd.Series()
         series_divs_history = None
@@ -530,42 +530,29 @@ if search_input:
             if len(clean_divs) >= 4: cagr_3 = calculate_cagr(clean_divs.iloc[-4], clean_divs.iloc[-1], 3) * 100
             if len(clean_divs) >= 6: cagr_5 = calculate_cagr(clean_divs.iloc[-6], clean_divs.iloc[-1], 5) * 100
             
-            # --- ROBUST PAYOUT CALCULATION ---
-            # Strategy:
-            # 1. Calculate Payout via INFO (TTM FCF & Div Rate) -> Best for Non-REITs like KO
-            # 2. Calculate Payout via DF (Annual Data) -> Best for REITs (OCF based) or fallback
-            
-            payout_via_info = None
+            # --- ROBUST PAYOUT CALCULATION (PRIORITY INVERSION) ---
+            # Priority 1: TTM FCF (Live Data) - Best for Non-REITs (KO, etc)
             try:
                 ttm_fcf = safe_get(info, 'freeCashFlow')
                 div_rate = safe_get(info, 'dividendRate')
                 shares = safe_get(info, 'sharesOutstanding')
-                if ttm_fcf > 0 and div_rate > 0 and shares > 0:
-                    total_div_est = div_rate * shares
-                    payout_via_info = (total_div_est / ttm_fcf) * 100
+                if ttm_fcf and ttm_fcf > 0 and div_rate and div_rate > 0 and shares:
+                    est_total_divs = div_rate * shares
+                    fcf_payout_ratio = (est_total_divs / ttm_fcf) * 100
             except: pass
 
-            payout_via_df = None
-            if h_divs_paid is not None and h_ocf is not None:
-                last_divs_total = abs(h_divs_paid.iloc[-1]) 
-                last_ocf_total = h_ocf.iloc[-1]
-                denominator = 0
-                if is_reit: denominator = last_ocf_total
-                else:
-                    if h_capex is not None: denominator = last_ocf_total + h_capex.iloc[-1]
-                    else: denominator = last_ocf_total
-                
-                if denominator > 0: payout_via_df = (last_divs_total / denominator) * 100
-            
-            # Decision Logic
-            if is_reit:
-                # For REITs, DF (OCF based) is usually better than 'freeCashFlow' from info
-                if payout_via_df: fcf_payout_ratio = payout_via_df
-                elif payout_via_info: fcf_payout_ratio = payout_via_info
-            else:
-                # For Normal Companies (KO), INFO (TTM) is usually better/fresher
-                if payout_via_info: fcf_payout_ratio = payout_via_info
-                elif payout_via_df: fcf_payout_ratio = payout_via_df
+            # Priority 2: Annual DF (Backup if TTM fails)
+            if fcf_payout_ratio is None:
+                if h_divs_paid is not None and h_ocf is not None:
+                    last_divs_total = abs(h_divs_paid.iloc[-1]) 
+                    last_ocf_total = h_ocf.iloc[-1]
+                    denominator = 0
+                    if is_reit: denominator = last_ocf_total
+                    else:
+                        if h_capex is not None: denominator = last_ocf_total + h_capex.iloc[-1]
+                        else: denominator = last_ocf_total
+                    
+                    if denominator > 0: fcf_payout_ratio = (last_divs_total / denominator) * 100
 
         series_yield_history = None
         hist_price = stock.history(period="10y")
@@ -601,6 +588,7 @@ if search_input:
             final_payout_label = "Payout (FCF)"
             final_payout_help = "Dividends / Free Cash Flow. Shows the real cash safety."
             
+            # Use calculated FCF Payout if valid, else fallback to GAAP
             if fcf_payout_ratio is not None and 0 < fcf_payout_ratio < 500:
                 final_payout_val = fcf_payout_ratio
                 if is_reit: final_payout_label = "Payout (Est. AFFO)"
