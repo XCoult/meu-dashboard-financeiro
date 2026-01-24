@@ -6,7 +6,6 @@ import altair as alt
 import requests
 import xml.etree.ElementTree as ET
 import time
-import random
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Paulo Moura Dashboard", layout="wide")
@@ -161,38 +160,34 @@ def get_google_news(ticker):
     except: return []
     return []
 
-# --- ROBUST DATA FETCHING (RETRY LOGIC) ---
+# --- ROBUST DATA FETCHING (FIXED SERIALIZATION) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_stock_data(ticker):
-    # Tenta 3 vezes com pausas
     max_retries = 3
     stock = yf.Ticker(ticker)
     
     for i in range(max_retries):
         try:
-            # Tentar uma chamada leve primeiro para ver se funciona
             history = stock.history(period="5d")
             
             if not history.empty:
-                # Se funcionou, busca o resto
                 try: info = stock.info
                 except: info = {}
                 
+                # Fetch all dataframes
                 financials = stock.financials
                 cashflow = stock.cashflow
                 balance = stock.balance_sheet
                 divs = stock.dividends
                 q_cashflow = stock.quarterly_cashflow
-                
-                # Fetch long history separately
                 long_history = stock.history(period="10y")
                 
                 insider = None
                 try: insider = stock.insider_transactions
                 except: pass
 
+                # IMPORTANT: Do NOT return 'stock' object here. Only dataframes/dicts.
                 return {
-                    "stock_obj": stock,
                     "info": info,
                     "history": long_history,
                     "financials": financials,
@@ -203,10 +198,9 @@ def fetch_stock_data(ticker):
                     "insider": insider
                 }
         except Exception:
-            # Se falhar, espera 2, 4, 6 segundos e tenta de novo
             time.sleep((i + 1) * 2)
             
-    return None # Falhou todas as tentativas
+    return None
 
 # --- CHARTING FUNCTIONS ---
 def create_altair_chart(data, bar_color, value_format='$.2f', y_title=''):
@@ -321,7 +315,6 @@ if search_input:
         st.stop()
 
     # Unpack Data
-    stock = data_bundle['stock_obj']
     info = data_bundle['info']
     financials = data_bundle['financials']
     cashflow = data_bundle['cashflow']
