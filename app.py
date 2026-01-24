@@ -5,6 +5,7 @@ import numpy as np
 import altair as alt
 import requests
 import xml.etree.ElementTree as ET
+import time
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Paulo Moura Dashboard", layout="wide")
@@ -114,7 +115,6 @@ def get_metric_status(value, is_reit, metric_type):
     if value is None: return None, "off"
     
     if metric_type == 'payout':
-        # Now based on FCF for everyone
         limit_good = 90 if is_reit else 75 
         limit_bad = 100 if is_reit else 90
         if value < limit_good: return "Safe", "normal"
@@ -169,7 +169,6 @@ def get_metric_status(value, is_reit, metric_type):
 def search_symbol(query):
     try:
         url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}"
-        # Usar headers apenas aqui, onde usamos requests diretamente
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
         response = requests.get(url, headers=headers, timeout=5)
         data = response.json()
@@ -182,7 +181,6 @@ def search_symbol(query):
 def get_google_news(ticker):
     try:
         url = f"https://news.google.com/rss/search?q={ticker}+stock+finance&hl=en-US&gl=US&ceid=US:en"
-        # Usar headers apenas aqui também
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=4) 
         if response.status_code == 200:
@@ -197,6 +195,54 @@ def get_google_news(ticker):
             return news_list
     except: return []
     return []
+
+# --- FETCH DATA WITH CACHE (CRITICAL FIX) ---
+# Esta função guarda os dados em cache para não pedir sempre ao Yahoo
+@st.cache_data(ttl=3600) # Guarda os dados por 1 hora
+def fetch_stock_data(ticker):
+    stock = yf.Ticker(ticker)
+    
+    # 1. Tentar obter histórico primeiro (por vezes "desbloqueia" o cookie)
+    try:
+        history = stock.history(period="10y")
+        if history.empty:
+            return None
+    except Exception as e:
+        # Se falhar, tentamos esperar 1 segundo e tentar de novo
+        time.sleep(1)
+        try:
+            history = stock.history(period="10y")
+        except:
+            return None
+
+    # 2. Obter Info com tratamento de erro
+    try:
+        info = stock.info
+    except Exception:
+        info = {} # Se falhar o info, tentamos continuar com dados vazios
+    
+    # 3. Obter restantes tabelas
+    financials = stock.financials
+    cashflow = stock.cashflow
+    balance = stock.balance_sheet
+    divs = stock.dividends
+    q_cashflow = stock.quarterly_cashflow
+    insider = None
+    try:
+        insider = stock.insider_transactions
+    except: pass
+
+    return {
+        "stock_obj": stock, # Guardamos o objeto para coisas extra
+        "info": info,
+        "history": history,
+        "financials": financials,
+        "cashflow": cashflow,
+        "balance": balance,
+        "dividends": divs,
+        "q_cashflow": q_cashflow,
+        "insider": insider
+    }
 
 # --- CHARTING ---
 def create_altair_chart(data, bar_color, value_format='$.2f', y_title=''):
@@ -298,26 +344,29 @@ if search_input:
             found_ticker = search_symbol(search_input)
             if found_ticker: ticker = found_ticker
 
-    # [CORREÇÃO FINAL] Removido o argumento 'session='
-    # O yfinance moderno lida automaticamente com a sessão
-    stock = yf.Ticker(ticker)
-    
+    # 1. Fetch Data with Cache Handling
+    data_bundle = None
     try:
-        hist_check = stock.history(period="1d")
-        if hist_check.empty:
-            st.error(f"Could not find data for '{search_input}' (Tried ticker: {ticker}).")
-            st.stop()
+        data_bundle = fetch_stock_data(ticker)
     except Exception as e:
-        st.error(f"Connection Error: {e}")
+        st.error(f"Erro ao ligar ao Yahoo Finance (Rate Limit). Por favor, aguarda uns segundos e tenta novamente.")
+        st.stop()
+    
+    if data_bundle is None or data_bundle['history'].empty:
+        st.error(f"Não foram encontrados dados para '{ticker}'.")
         st.stop()
 
+    stock = data_bundle['stock_obj']
+    info = data_bundle['info']
+    financials = data_bundle['financials']
+    cashflow = data_bundle['cashflow']
+    balance = data_bundle['balance']
+    divs = data_bundle['dividends']
+    hist_price = data_bundle['history']
+    q_cashflow = data_bundle['q_cashflow']
+    insider_tx = data_bundle['insider']
+
     with st.spinner(f'Analyzing {ticker}...'):
-        # 1. Fetch Data
-        info = stock.info
-        financials = stock.financials
-        cashflow = stock.cashflow
-        balance = stock.balance_sheet
-        divs = stock.dividends
         
         # 2. Process Data
         h_net_income = find_line(cashflow, ['net income'])
@@ -350,13 +399,11 @@ if search_input:
             
             # --- UNIVERSAL CASH METRIC (FCF or AFFO) ---
             if is_reit:
-                # For REITs, OCF is often the best proxy for AFFO available freely
                 if df_calc['OCF'].sum() != 0:
                     df_calc['Cash_Metric'] = df_calc['OCF']
                 else:
                     df_calc['Cash_Metric'] = df_calc['NI'].fillna(0) + df_calc['DEPR'].fillna(0)
             else:
-                # For Normal Stocks, FCF = OCF + CAPEX (Capex is negative)
                 df_calc['Cash_Metric'] = df_calc['OCF'].fillna(0) + df_calc['CAPEX'].fillna(0)
 
             if 'SHARES' in df_calc.columns:
@@ -460,10 +507,9 @@ if search_input:
         insider_label = "Neutral"
         insider_val_str = "N/A"
         insider_delta_display = "No recent data"
-        insider_tx = None
+        
         net_val_insider = 0
         try:
-            insider_tx = stock.insider_transactions
             if insider_tx is not None and not insider_tx.empty:
                 recent = insider_tx.head(20) 
                 buy_count = 0
@@ -515,10 +561,8 @@ if search_input:
             if len(clean_divs) >= 6: cagr_5 = calculate_cagr(clean_divs.iloc[-6], clean_divs.iloc[-1], 5) * 100
             
             # --- SUPER ROBUST PAYOUT CALCULATION (MANUAL CONSTRUCTION) ---
-            # Try to build TTM FCF manually from quarterly cashflow
             try:
                 # 1. Fetch Quarterly Cashflow
-                q_cashflow = stock.quarterly_cashflow
                 if q_cashflow is not None and not q_cashflow.empty:
                     # Get OCF line
                     line_ocf = find_line(q_cashflow, ['operating cash flow', 'total cash from operating activities'])
@@ -558,7 +602,6 @@ if search_input:
                 except: pass
 
         series_yield_history = None
-        hist_price = stock.history(period="10y")
         if has_dividends and not hist_price.empty and not divs.empty:
             avg_price_yr = hist_price['Close'].resample('YE').mean()
             sum_div_yr = divs.resample('YE').sum()
