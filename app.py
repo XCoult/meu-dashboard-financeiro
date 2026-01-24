@@ -70,14 +70,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- HELPER FUNCTIONS ---
-def get_yfinance_session():
-    """Cria uma sessão disfarçada de browser para evitar bloqueios do Yahoo."""
-    session = requests.Session()
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    })
-    return session
-
 def safe_get(data_dict, key, default=0):
     val = data_dict.get(key)
     return val if val is not None else default
@@ -176,10 +168,10 @@ def get_metric_status(value, is_reit, metric_type):
 # --- SMART SEARCH ---
 def search_symbol(query):
     try:
-        # Usar session também na pesquisa
-        session = get_yfinance_session()
         url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}"
-        response = session.get(url, timeout=5)
+        # Usar headers apenas aqui, onde usamos requests diretamente
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        response = requests.get(url, headers=headers, timeout=5)
         data = response.json()
         if 'quotes' in data and len(data['quotes']) > 0:
             return data['quotes'][0]['symbol']
@@ -190,7 +182,7 @@ def search_symbol(query):
 def get_google_news(ticker):
     try:
         url = f"https://news.google.com/rss/search?q={ticker}+stock+finance&hl=en-US&gl=US&ceid=US:en"
-        # Usar headers para evitar bloqueio do Google também
+        # Usar headers apenas aqui também
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=4) 
         if response.status_code == 200:
@@ -306,9 +298,9 @@ if search_input:
             found_ticker = search_symbol(search_input)
             if found_ticker: ticker = found_ticker
 
-    # [CORREÇÃO] Criar sessão com User-Agent e passar para o Ticker
-    session = get_yfinance_session()
-    stock = yf.Ticker(ticker, session=session)
+    # [CORREÇÃO FINAL] Removido o argumento 'session='
+    # O yfinance moderno lida automaticamente com a sessão
+    stock = yf.Ticker(ticker)
     
     try:
         hist_check = stock.history(period="1d")
@@ -906,12 +898,10 @@ if search_input:
                 
                 comp_data = []
                 
-                # Criar sessão também para os loops
-                session_comp = get_yfinance_session()
-                
                 for t in tickers_to_compare:
                     try:
-                        p_stock = yf.Ticker(t, session=session_comp)
+                        # [CORREÇÃO FINAL] Removido o argumento 'session='
+                        p_stock = yf.Ticker(t)
                         p_info = p_stock.info
                         
                         # Cálculos rápidos
