@@ -8,205 +8,307 @@ import xml.etree.ElementTree as ET
 import time
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Paulo Moura Dashboard", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Paulo Moura Dashboard", layout="wide")
 
-# --- TRANSLATION SYSTEM ---
-# Dicionário de traduções (PT / EN)
+# --- SESSION STATE INITIALIZATION ---
+if 'lang' not in st.session_state:
+    st.session_state.lang = 'pt'
+if 'search_term' not in st.session_state:
+    st.session_state.search_term = ''
+
+# --- TRANSLATIONS (PT / EN / FR) ---
 LANG = {
     "pt": {
-        "sidebar_settings": "Definições",
-        "sidebar_lang": "Idioma / Language",
-        "search_label": "Pesquisar Empresa",
-        "search_placeholder": "Ex: AAPL, KO, Realty Income...",
-        "btn_search": "🔍 Analisar",
-        "welcome_title": "Investimento Inteligente Simplificado",
-        "welcome_subtitle": "Análise fundamentalista de ações e REITs em segundos.",
-        "how_it_works": "Como funciona:",
-        "step_1": "1. Escreva o **Ticker** (ex: O, AAPL) ou o nome da empresa.",
-        "step_2": "2. Veja métricas de **Segurança**, **Dividendos** e **Vantagem Competitiva**.",
-        "step_3": "3. Tome decisões baseadas em dados, não em palpites.",
-        "try_examples": "Ou experimente um destes exemplos:",
-        "loading": "A analisar",
-        "conn_error": "Erro de conexão ou limite de pedidos.",
-        "not_found": "Empresa não encontrada.",
+        "title": "Paulo Moura Dashboard",
+        "search_label": "Pesquisar Ativo",
+        "search_placeholder": "Ex: AAPL, O, KO...",
+        "btn_search": "🔍",
+        "hero_title": "Análise Financeira Profissional",
+        "hero_sub": "Dados fundamentais, dividendos e valuation em segundos.",
+        "card_1_title": "🛡️ Segurança",
+        "card_1_text": "Análise de Dívida e Solvência.",
+        "card_2_title": "💰 Dividendos",
+        "card_2_text": "Histórico e Segurança do Payout.",
+        "card_3_title": "🏰 Moat",
+        "card_3_text": "Vantagens Competitivas Reais.",
+        "ex_btn": "Ver Exemplo:",
+        "loading": "A carregar dados de",
         "price": "Preço",
         "market_cap": "Valor de Mercado",
         "yield": "Dividend Yield",
         "profit_margin": "Margem Líquida",
         "perf_title": "I. Performance Financeira",
-        "affo_trend": "Tendência AFFO/Share ($)",
+        "affo_trend": "Tendência AFFO ($)",
         "eps_trend": "Tendência EPS ($)",
-        "cash_metric": "Fluxo de Caixa Operacional / FCF",
-        "total_cash": "Cash Flow Total ($)",
+        "cash_metric": "Fluxo de Caixa Operacional",
+        "total_cash": "Cash Flow Total",
         "struct_title": "II. Estrutura & Segurança",
-        "shares": "Ações em Circulação (Diluição)",
-        "debt": "Dívida Total ($)",
+        "shares": "Ações em Circulação",
+        "debt": "Dívida Total",
         "safety_score": "Scorecard de Segurança",
         "net_debt": "Dívida Líq./EBITDA",
         "int_cov": "Cob. de Juros",
-        "insider": "Transações de Insiders (6M)",
-        "beta": "Beta (Volatilidade)",
+        "insider": "Insiders (6M)",
+        "beta": "Beta",
         "val_title": "III. Avaliação & Qualidade",
-        "yield_hist": "Histórico de Yield (%)",
-        "rev_hist": "Histórico de Receita ($)",
-        "gm_trend": "Margem Bruta (%)",
-        "div_hist": "Histórico de Dividendos ($)",
-        "ni_hist": "Histórico de Lucro Líquido ($)",
         "val_score": "Scorecard de Avaliação",
-        "div_cagr": "Cresc. Div (5A)",
-        "chowder": "Regra de Chowder",
-        "rev_growth": "Cresc. Receita",
-        "eps_growth": "Cresc. EPS",
+        "yield_hist": "Histórico Yield",
+        "rev_hist": "Histórico Receita",
+        "gm_trend": "Margem Bruta",
+        "div_hist": "Histórico Dividendos",
+        "ni_hist": "Lucro Líquido",
         "moat_title": "🏰 Vantagem Competitiva (Moat)",
-        "safety_title": "IV. Análise de Solvência",
+        "safety_title": "IV. Solvência & Cash Flow",
         "div_safety": "Segurança do Dividendo",
-        "solvency": "Solvência (Cash vs Dívida)",
-        "analyst_title": "V. Estimativas & Notícias",
-        "consensus": "Consenso Wall St.",
-        "target": "Preço Alvo Médio",
-        "news": "Últimas Notícias",
+        "solvency": "Solvência",
+        "analyst_title": "V. Analistas & Notícias",
+        "consensus": "Consenso",
+        "target": "Preço Alvo",
+        "news": "Notícias Recentes",
         "auto_summary": "🤖 Análise Automática",
-        "bull": "Pontos Fortes (Bull)",
-        "bear": "Pontos Fracos (Bear)",
-        "comp_title": "VI. Comparação com Competidores",
-        "comp_input": "Adicionar concorrentes (sep. por vírgula):",
-        "comp_placeholder": "Ex: KO, PEP, MNST",
-        "footer": "Dados fornecidos por Yahoo Finance | Ferramenta Educacional"
+        "bull": "Pontos Fortes",
+        "bear": "Pontos Fracos",
+        "comp_title": "VI. Comparação",
+        "comp_input": "Comparar com (tickers):",
+        "no_data": "Sem dados ou ticker inválido.",
+        "footer": "Dados Yahoo Finance | Uso Educacional"
     },
     "en": {
-        "sidebar_settings": "Settings",
-        "sidebar_lang": "Language",
-        "search_label": "Search Ticker",
-        "search_placeholder": "e.g. AAPL, KO, Realty Income...",
-        "btn_search": "🔍 Analyze",
-        "welcome_title": "Smart Investing Simplified",
-        "welcome_subtitle": "Fundamental analysis for Stocks and REITs in seconds.",
-        "how_it_works": "How it works:",
-        "step_1": "1. Enter a **Ticker** (e.g., O, AAPL) or company name.",
-        "step_2": "2. View **Safety**, **Dividend** and **Moat** metrics.",
-        "step_3": "3. Make data-driven decisions.",
-        "try_examples": "Or try one of these examples:",
-        "loading": "Analyzing",
-        "conn_error": "Connection error or rate limit.",
-        "not_found": "Company not found.",
+        "title": "Paulo Moura Dashboard",
+        "search_label": "Search Asset",
+        "search_placeholder": "e.g. AAPL, O, KO...",
+        "btn_search": "🔍",
+        "hero_title": "Professional Financial Analysis",
+        "hero_sub": "Fundamental data, dividends, and valuation in seconds.",
+        "card_1_title": "🛡️ Safety",
+        "card_1_text": "Debt & Solvency Analysis.",
+        "card_2_title": "💰 Dividends",
+        "card_2_text": "History & Payout Safety.",
+        "card_3_title": "🏰 Moat",
+        "card_3_text": "Competitive Advantages.",
+        "ex_btn": "Try Example:",
+        "loading": "Loading data for",
         "price": "Price",
         "market_cap": "Market Cap",
         "yield": "Dividend Yield",
         "profit_margin": "Net Margin",
         "perf_title": "I. Financial Performance",
-        "affo_trend": "AFFO/Share Trend ($)",
+        "affo_trend": "AFFO Trend ($)",
         "eps_trend": "EPS Trend ($)",
-        "cash_metric": "Operating Cash Flow / FCF",
-        "total_cash": "Total Cash Flow ($)",
+        "cash_metric": "Operating Cash Flow",
+        "total_cash": "Total Cash Flow",
         "struct_title": "II. Structure & Safety",
         "shares": "Shares Outstanding",
-        "debt": "Total Debt ($)",
+        "debt": "Total Debt",
         "safety_score": "Safety Scorecard",
         "net_debt": "Net Debt/EBITDA",
         "int_cov": "Interest Cov.",
-        "insider": "Insider Trading (6M)",
-        "beta": "Beta (Volatility)",
+        "insider": "Insiders (6M)",
+        "beta": "Beta",
         "val_title": "III. Valuation & Quality",
-        "yield_hist": "Yield History (%)",
-        "rev_hist": "Revenue History ($)",
-        "gm_trend": "Gross Margin (%)",
-        "div_hist": "Dividend History ($)",
-        "ni_hist": "Net Income History ($)",
         "val_score": "Valuation Scorecard",
-        "div_cagr": "Div Growth (5Y)",
-        "chowder": "Chowder Rule",
-        "rev_growth": "Rev Growth",
-        "eps_growth": "EPS Growth",
+        "yield_hist": "Yield History",
+        "rev_hist": "Revenue History",
+        "gm_trend": "Gross Margin",
+        "div_hist": "Dividend History",
+        "ni_hist": "Net Income",
         "moat_title": "🏰 Competitive Advantage (Moat)",
-        "safety_title": "IV. Solvency Analysis",
+        "safety_title": "IV. Solvency & Cash Flow",
         "div_safety": "Dividend Safety",
-        "solvency": "Solvency (Cash vs Debt)",
-        "analyst_title": "V. Estimates & News",
-        "consensus": "Wall St. Consensus",
-        "target": "Avg Price Target",
-        "news": "Latest Headlines",
+        "solvency": "Solvency",
+        "analyst_title": "V. Analysts & News",
+        "consensus": "Consensus",
+        "target": "Price Target",
+        "news": "Latest News",
         "auto_summary": "🤖 Automated Analysis",
-        "bull": "The Bull Case",
-        "bear": "The Bear Case",
-        "comp_title": "VI. Competitor Comparison",
-        "comp_input": "Add competitors (comma sep):",
-        "comp_placeholder": "e.g. KO, PEP, MNST",
-        "footer": "Data provided by Yahoo Finance | Educational Tool"
+        "bull": "Bull Case",
+        "bear": "Bear Case",
+        "comp_title": "VI. Comparison",
+        "comp_input": "Compare with (tickers):",
+        "no_data": "No data or invalid ticker.",
+        "footer": "Data by Yahoo Finance | Educational Use"
+    },
+    "fr": {
+        "title": "Tableau de Bord Paulo Moura",
+        "search_label": "Rechercher un Actif",
+        "search_placeholder": "ex: LVMH, AAPL, O...",
+        "btn_search": "🔍",
+        "hero_title": "Analyse Financière Pro",
+        "hero_sub": "Données fondamentales, dividendes et valorisation.",
+        "card_1_title": "🛡️ Sécurité",
+        "card_1_text": "Analyse de la Dette.",
+        "card_2_title": "💰 Dividendes",
+        "card_2_text": "Historique et Sûreté.",
+        "card_3_title": "🏰 Moat",
+        "card_3_text": "Avantages Concurrentiels.",
+        "ex_btn": "Exemple:",
+        "loading": "Chargement des données",
+        "price": "Prix",
+        "market_cap": "Cap. Boursière",
+        "yield": "Rendement",
+        "profit_margin": "Marge Nette",
+        "perf_title": "I. Performance Financière",
+        "affo_trend": "Tendance AFFO ($)",
+        "eps_trend": "Tendance BPA ($)",
+        "cash_metric": "Flux de Trésorerie",
+        "total_cash": "Cash Flow Total",
+        "struct_title": "II. Structure & Sécurité",
+        "shares": "Actions en Circulation",
+        "debt": "Dette Totale",
+        "safety_score": "Score de Sécurité",
+        "net_debt": "Dette Nette/EBITDA",
+        "int_cov": "Couv. Intérêts",
+        "insider": "Initiés (6M)",
+        "beta": "Bêta",
+        "val_title": "III. Valorisation & Qualité",
+        "val_score": "Score de Valorisation",
+        "yield_hist": "Historique Rendement",
+        "rev_hist": "Historique Revenus",
+        "gm_trend": "Marge Brute",
+        "div_hist": "Historique Dividendes",
+        "ni_hist": "Résultat Net",
+        "moat_title": "🏰 Avantage Concurrentiel (Moat)",
+        "safety_title": "IV. Solvabilité & Cash Flow",
+        "div_safety": "Sûreté du Dividende",
+        "solvency": "Solvabilité",
+        "analyst_title": "V. Analystes & Actualités",
+        "consensus": "Consensus",
+        "target": "Objectif de Cours",
+        "news": "Actualités",
+        "auto_summary": "🤖 Analyse Automatique",
+        "bull": "Points Forts",
+        "bear": "Points Faibles",
+        "comp_title": "VI. Comparaison",
+        "comp_input": "Comparer avec:",
+        "no_data": "Pas de données.",
+        "footer": "Données Yahoo Finance | Usage Éducatif"
     }
 }
+
+# Definir idioma atual
+T = LANG[st.session_state.lang]
 
 # --- CUSTOM CSS ---
 st.markdown("""
     <style>
-    /* Clean Look */
+    /* Global Clean Style */
     .stApp { background-color: #ffffff; }
-    h1, h2, h3 { font-family: 'Helvetica Neue', sans-serif; color: #111; }
+    h1, h2, h3 { font-family: 'Helvetica Neue', sans-serif; color: #111; letter-spacing: -0.5px; }
     
-    /* Metrics Styling */
-    div[data-testid="stMetricValue"] { font-size: 1.6rem !important; font-weight: 700; color: #333; }
-    div[data-testid="stMetricLabel"] { font-size: 0.9rem !important; color: #666; }
-    
-    /* Buttons */
-    div.stButton > button {
-        background-color: #f8f9fa;
-        color: #333;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        padding: 0.5rem 1rem;
-        transition: all 0.2s;
+    /* Top Bar Styling */
+    .lang-btn { 
+        border: none; 
+        background: none; 
+        font-size: 1.5rem; 
+        cursor: pointer; 
+        padding: 5px;
+        transition: transform 0.2s;
     }
-    div.stButton > button:hover {
-        border-color: #4169E1;
-        color: #4169E1;
-        background-color: #fff;
+    .lang-btn:hover { transform: scale(1.2); }
+    
+    /* Hero Section */
+    .hero-container {
+        text-align: center;
+        padding: 60px 20px;
+        margin-bottom: 30px;
+    }
+    .hero-title {
+        font-size: 3rem;
+        font-weight: 800;
+        background: -webkit-linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 10px;
+    }
+    .hero-sub {
+        font-size: 1.3rem;
+        color: #666;
+        margin-bottom: 40px;
     }
     
-    /* Example Buttons on Landing Page */
-    .example-btn-container { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
-    
-    /* Cards for Moat */
+    /* Feature Cards */
+    .feature-grid {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        flex-wrap: wrap;
+    }
+    .feature-card {
+        background: white;
+        border: 1px solid #eee;
+        border-radius: 12px;
+        padding: 20px;
+        width: 250px;
+        text-align: left;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        transition: transform 0.2s;
+    }
+    .feature-card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+    .fc-icon { font-size: 2rem; margin-bottom: 10px; }
+    .fc-title { font-weight: 700; font-size: 1.1rem; color: #333; margin-bottom: 5px; }
+    .fc-text { font-size: 0.9rem; color: #777; }
+
+    /* Moat Cards (Analysis) */
     .moat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-    .moat-card { flex: 1; min-width: 140px; background-color: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #eee; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .moat-card { flex: 1; min-width: 140px; background-color: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e0e0e0; }
     .moat-label { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
     .moat-value { font-size: 1.1rem; font-weight: 700; color: #333; }
     .moat-good { border-top: 4px solid #28a745; }
     .moat-avg { border-top: 4px solid #ffc107; }
     .moat-bad { border-top: 4px solid #dc3545; }
     
-    /* News */
-    a.news-link { text-decoration: none; color: #0066cc; font-weight: 600; display: block; margin-bottom: 4px; }
-    a.news-link:hover { text-decoration: underline; }
-    .news-meta { color: #999; font-size: 0.75rem; margin-bottom: 12px; display: block; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; }
-    
-    /* Welcome Container */
-    .welcome-box {
-        text-align: center;
-        padding: 40px 20px;
-        background: linear-gradient(to bottom, #ffffff, #f8f9fa);
-        border-radius: 12px;
-        margin-top: 20px;
-        border: 1px solid #eee;
+    /* Buttons */
+    div.stButton > button {
+        border-radius: 8px;
+        font-weight: 600;
     }
-    .welcome-title { font-size: 2.5rem; font-weight: 800; color: #111; margin-bottom: 10px; }
-    .welcome-sub { font-size: 1.2rem; color: #666; margin-bottom: 30px; }
-    .step-box { text-align: left; max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; border: 1px solid #eee; }
+    
+    /* News */
+    a.news-link { text-decoration: none; color: #0066cc; font-weight: 600; }
+    .news-meta { color: #999; font-size: 0.75rem; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; margin-bottom: 12px; display: block;}
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR (SETTINGS) ---
-with st.sidebar:
-    st.header("⚙️ " + "Opções" if "pt" else "Settings")
+# --- HEADER LAYOUT (TITLE + LANG) ---
+c_title, c_fill, c_lang = st.columns([6, 3, 3])
+
+with c_title:
+    st.markdown(f"### 📊 {T['title']}")
+
+with c_lang:
+    # Language Buttons aligned right
+    l1, l2, l3 = st.columns(3)
     
-    # Language Selector
-    lang_choice = st.selectbox(
-        "Idioma / Language", 
-        ["🇵🇹 Português", "🇺🇸 English"], 
-        index=0
-    )
+    def set_lang(l):
+        st.session_state.lang = l
+        # st.rerun() # Uncomment if needed, but button click usually triggers rerun
+
+    if l1.button("🇵🇹", use_container_width=True): set_lang('pt')
+    if l2.button("🇺🇸", use_container_width=True): set_lang('en')
+    if l3.button("🇫🇷", use_container_width=True): set_lang('fr')
+
+st.markdown("---")
+
+# --- SEARCH BAR ---
+# Using a form to handle 'Enter' key and clean UI
+with st.container():
+    c_search, c_btn = st.columns([5, 1])
+    with c_search:
+        # Bind input to session state to preserve value across reloads
+        query = st.text_input(
+            T['search_label'], 
+            value=st.session_state.search_term, 
+            placeholder=T['search_placeholder'],
+            label_visibility="collapsed"
+        ).strip()
     
-    # Set Language Key
-    lg = "pt" if "Português" in lang_choice else "en"
-    T = LANG[lg] # Get translation dictionary
+    with c_btn:
+        if st.button(T['btn_search'], use_container_width=True):
+            st.session_state.search_term = query # Update state explicitly
+
+    # Update state if input changes
+    if query != st.session_state.search_term:
+        st.session_state.search_term = query
 
 # --- HELPER FUNCTIONS ---
 def safe_get(data_dict, key, default=0):
@@ -250,7 +352,6 @@ def format_large_number(num):
     elif num >= 1_000: return f"${num/1_000:.0f}K"
     else: return f"${num:.0f}"
 
-# --- TRAFFIC LIGHT LOGIC ---
 def get_metric_status(value, is_reit, metric_type):
     if value is None: return None, "off"
     
@@ -260,21 +361,17 @@ def get_metric_status(value, is_reit, metric_type):
         if value < limit_good: return "Safe", "normal"
         elif value > limit_bad: return "High", "inverse"
         else: return "OK", "off"
-
     elif metric_type == 'net_debt_ebitda':
         limit_good = 6.0 if is_reit else 3.0
         limit_bad = 7.5 if is_reit else 4.5
         if value < limit_good: return "Safe", "normal"
         elif value > limit_bad: return "High Debt", "inverse"
         else: return "Elevated", "off"
-
     elif metric_type == 'int_cov':
-        limit_bad = 1.5
-        limit_good = 3.0
+        limit_bad = 1.5; limit_good = 3.0
         if value > limit_good: return "Safe", "normal"
         elif value < limit_bad: return "Critical", "inverse"
         else: return "Tight", "off"
-
     elif metric_type == 'roe' or metric_type == 'roic' or metric_type == 'profit_margin':
         limit_good = 12 if metric_type == 'roe' else 8
         limit_bad = 5
@@ -282,30 +379,20 @@ def get_metric_status(value, is_reit, metric_type):
         if value > limit_good: return "Good", "normal"
         elif value < limit_bad: return "Low", "inverse"
         else: return "Average", "off"
-
     elif metric_type == 'chowder':
         limit_good = 8 if is_reit else 12
         if value > limit_good: return "Attractive", "normal"
         else: return "Low Growth", "off"
-        
     elif metric_type == 'gross_margin':
         if value > 40: return "High", "normal"
         elif value < 20: return "Low", "inverse"
         else: return "Average", "off"
-
     elif metric_type == 'beta':
         if value < 0.8: return "Defensive", "normal"
         elif value > 1.3: return "Volatile", "inverse"
         else: return "Market", "off"
-    
-    elif metric_type == 'moat_score':
-        if value >= 3: return "Wide Moat", "normal"
-        elif value == 2: return "Narrow Moat", "off"
-        else: return "No Moat", "inverse"
-
     return None, "off"
 
-# --- SEARCH & NEWS ---
 def search_symbol(query):
     try:
         url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}"
@@ -319,7 +406,8 @@ def search_symbol(query):
 
 def get_google_news(ticker):
     try:
-        url = f"https://news.google.com/rss/search?q={ticker}+stock+finance&hl={lg}&gl=US&ceid=US:{lg}"
+        lang_code = st.session_state.lang
+        url = f"https://news.google.com/rss/search?q={ticker}+stock+finance&hl={lang_code}&gl=US&ceid=US:{lang_code}"
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=4) 
         if response.status_code == 200:
@@ -335,62 +423,52 @@ def get_google_news(ticker):
     except: return []
     return []
 
-# --- ROBUST DATA FETCHING ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_stock_data(ticker):
     max_retries = 3
     stock = yf.Ticker(ticker)
-    
     for i in range(max_retries):
         try:
             history = stock.history(period="10y")
             if not history.empty:
                 try: info = stock.info
                 except: info = {}
-                
                 fast_info_dict = {}
                 try:
                     fast_info = stock.fast_info
                     fast_info_dict = {'last_price': fast_info.last_price, 'market_cap': fast_info.market_cap}
                 except: pass
+                
+                insider = None
+                try: insider = stock.insider_transactions
+                except: pass
 
                 return {
-                    "info": info,
-                    "fast_info": fast_info_dict,
-                    "history": history,
-                    "financials": stock.financials,
-                    "cashflow": stock.cashflow,
-                    "balance": stock.balance_sheet,
-                    "dividends": stock.dividends,
-                    "q_cashflow": stock.quarterly_cashflow,
-                    "insider": stock.insider_transactions if hasattr(stock, 'insider_transactions') else None
+                    "info": info, "fast_info": fast_info_dict, "history": history,
+                    "financials": stock.financials, "cashflow": stock.cashflow,
+                    "balance": stock.balance_sheet, "dividends": stock.dividends,
+                    "q_cashflow": stock.quarterly_cashflow, "insider": insider
                 }
         except Exception: time.sleep(1)
     return None
 
-# --- CHARTING ---
 def create_altair_chart(data, bar_color, value_format='$.2f', y_title=''):
     try:
         if data is None or data.empty: return None
         df_chart = pd.DataFrame()
         if hasattr(data.index, 'strftime'): years = data.index.strftime('%Y')
         else: years = data.index.astype(str)
-
         if isinstance(data, pd.Series): df_chart = pd.DataFrame({'Year': years, 'Value': data.values})
         elif isinstance(data, pd.DataFrame):
-             df_chart = data.copy()
-             df_chart['Year'] = years
+             df_chart = data.copy(); df_chart['Year'] = years
              if 'Value' not in df_chart.columns: df_chart['Value'] = df_chart.iloc[:, 0]
-
         df_chart = df_chart.dropna().sort_values('Year').tail(10)
         if df_chart.empty: return None
-
-        chart = alt.Chart(df_chart).mark_bar(width=30, color=bar_color).encode(
+        return alt.Chart(df_chart).mark_bar(width=30, color=bar_color).encode(
             x=alt.X('Year', axis=alt.Axis(title='', labelAngle=0), scale=alt.Scale(padding=0.3)),
             y=alt.Y('Value', axis=alt.Axis(title=y_title, format=value_format, grid=True, gridColor='#f0f0f0')),
             tooltip=['Year', alt.Tooltip('Value', format=value_format)]
         ).properties(height=220)
-        return chart
     except: return None
 
 def create_line_chart(data, line_color, value_format='$.2f'):
@@ -399,24 +477,18 @@ def create_line_chart(data, line_color, value_format='$.2f'):
         df_chart = pd.DataFrame()
         if hasattr(data.index, 'strftime'): years = data.index.strftime('%Y')
         else: years = data.index.astype(str)
-
         if isinstance(data, pd.Series): df_chart = pd.DataFrame({'Year': years, 'Value': data.values})
         elif isinstance(data, pd.DataFrame):
-             df_chart = data.copy()
-             df_chart['Year'] = years
+             df_chart = data.copy(); df_chart['Year'] = years
              if 'Value' not in df_chart.columns: df_chart['Value'] = df_chart.iloc[:, 0]
-
         df_chart = df_chart.dropna().sort_values('Year').tail(10)
         if df_chart.empty: return None
-
         line = alt.Chart(df_chart).mark_line(color=line_color, strokeWidth=3).encode(
             x=alt.X('Year', axis=alt.Axis(title='', labelAngle=0)),
             y=alt.Y('Value', axis=alt.Axis(title='', format=value_format, grid=True, gridColor='#f0f0f0')),
              tooltip=['Year', alt.Tooltip('Value', format=value_format)]
         )
-        points = alt.Chart(df_chart).mark_circle(size=80, color=line_color).encode(
-            x='Year', y='Value', tooltip=['Year', alt.Tooltip('Value', format=value_format)]
-        )
+        points = alt.Chart(df_chart).mark_circle(size=80, color=line_color).encode(x='Year', y='Value', tooltip=['Year', alt.Tooltip('Value', format=value_format)])
         return (line + points).properties(height=220)
     except: return None
 
@@ -427,254 +499,228 @@ def create_grouped_bar_chart(df_aligned, colors=None):
         df_chart.rename(columns={'index': 'Year'}, inplace=True)
         df_chart['Year'] = df_chart['Year'].astype(str)
         df_long = df_chart.melt('Year', var_name='Metric', value_name='Value')
-        
         domain = df_long['Metric'].unique().tolist()
         range_colors = ['#4682B4', '#FFA07A', '#32CD32'][:len(domain)] 
-        if colors and isinstance(colors, dict):
-            range_colors = [colors.get(m, '#888888') for m in domain]
-
-        chart = alt.Chart(df_long).mark_bar(strokeWidth=0).encode(
+        if colors and isinstance(colors, dict): range_colors = [colors.get(m, '#888888') for m in domain]
+        return alt.Chart(df_long).mark_bar(strokeWidth=0).encode(
             x=alt.X('Year:O', axis=alt.Axis(title='', labelAngle=0), scale=alt.Scale(padding=0.3)),
             y=alt.Y('Value:Q', axis=alt.Axis(title='Value ($)', format='$.2s', grid=True, gridColor='#f0f0f0')),
             color=alt.Color('Metric:N', scale=alt.Scale(domain=domain, range=range_colors), legend=alt.Legend(title="", orient="bottom")),
-            xOffset='Metric:N', 
-            tooltip=['Year', 'Metric', alt.Tooltip('Value', format='$.2s')]
+            xOffset='Metric:N', tooltip=['Year', 'Metric', alt.Tooltip('Value', format='$.2s')]
         ).properties(height=280)
-        return chart
     except: return None
 
-# --- UI INPUT ---
-st.title("📊 Paulo Moura Dashboard")
-
-# Session state for search
-if 'search_query' not in st.session_state:
-    st.session_state.search_query = ''
-
-def run_search(t):
-    st.session_state.search_query = t
-
-col_input, col_btn = st.columns([4, 1]) 
-with col_input:
-    search_input = st.text_input(T['search_label'], value=st.session_state.search_query, placeholder=T['search_placeholder']).strip()
-with col_btn:
-    st.write("") 
-    st.write("") 
-    search_btn = st.button(T['btn_search']) 
-
-# --- LANDING PAGE (IF NO SEARCH) ---
-if not search_input:
+# --- LANDING PAGE (NO SEARCH) ---
+if not st.session_state.search_term:
     st.markdown(f"""
-    <div class='welcome-box'>
-        <div class='welcome-title'>{T['welcome_title']}</div>
-        <div class='welcome-sub'>{T['welcome_subtitle']}</div>
+    <div class='hero-container'>
+        <div class='hero-title'>{T['hero_title']}</div>
+        <div class='hero-sub'>{T['hero_sub']}</div>
         
-        <div class='step-box'>
-            <p><strong>{T['how_it_works']}</strong></p>
-            <p>{T['step_1']}</p>
-            <p>{T['step_2']}</p>
-            <p>{T['step_3']}</p>
+        <div class='feature-grid'>
+            <div class='feature-card'>
+                <div class='fc-icon'>🛡️</div>
+                <div class='fc-title'>{T['card_1_title']}</div>
+                <div class='fc-text'>{T['card_1_text']}</div>
+            </div>
+            <div class='feature-card'>
+                <div class='fc-icon'>💰</div>
+                <div class='fc-title'>{T['card_2_title']}</div>
+                <div class='fc-text'>{T['card_2_text']}</div>
+            </div>
+            <div class='feature-card'>
+                <div class='fc-icon'>🏰</div>
+                <div class='fc-title'>{T['card_3_title']}</div>
+                <div class='fc-text'>{T['card_3_text']}</div>
+            </div>
         </div>
     </div>
-    <br>
-    <p style='text-align: center; color: #666;'>{T['try_examples']}</p>
     """, unsafe_allow_html=True)
     
-    # Example Buttons
-    c_ex1, c_ex2, c_ex3 = st.columns(3)
-    if c_ex1.button("🍎 Apple (AAPL)", use_container_width=True): run_search("AAPL"); st.rerun()
-    if c_ex2.button("🏘 Realty Income (O)", use_container_width=True): run_search("O"); st.rerun()
-    if c_ex3.button("🥤 Coca-Cola (KO)", use_container_width=True): run_search("KO"); st.rerun()
+    st.write("")
+    st.markdown(f"<p style='text-align:center; color:#888;'>{T['ex_btn']}</p>", unsafe_allow_html=True)
+    
+    # Center buttons using columns
+    _, c1, c2, c3, _ = st.columns([4, 2, 2, 2, 4])
+    def set_search(t):
+        st.session_state.search_term = t
+        
+    if c1.button("🍎 AAPL"): set_search("AAPL"); st.rerun()
+    if c2.button("🏘 O (Realty)"): set_search("O"); st.rerun()
+    if c3.button("🥤 KO (Coke)"): set_search("KO"); st.rerun()
 
 # --- MAIN ANALYSIS LOGIC ---
-if search_input:
-    ticker = search_input.upper()
+if st.session_state.search_term:
+    ticker = st.session_state.search_term.upper()
     if " " in ticker or len(ticker) > 5:
         with st.spinner(f"{T['loading']}..."):
-            found_ticker = search_symbol(search_input)
+            found_ticker = search_symbol(ticker)
             if found_ticker: ticker = found_ticker
 
-    # 1. Fetch Data
+    # Fetch Data
     with st.spinner(f"{T['loading']} {ticker}..."):
         data_bundle = fetch_stock_data(ticker)
     
     if data_bundle is None:
-        st.error(T['conn_error'])
-        st.stop()
+        st.error(T['no_data'])
+    else:
+        # Unpack
+        info = data_bundle['info']
+        fast_info = data_bundle.get('fast_info', {})
+        financials = data_bundle['financials']
+        cashflow = data_bundle['cashflow']
+        balance = data_bundle['balance']
+        divs = data_bundle['dividends']
+        hist_price = data_bundle['history']
+        q_cashflow = data_bundle['q_cashflow']
+        insider_tx = data_bundle['insider']
 
-    info = data_bundle['info']
-    fast_info = data_bundle.get('fast_info', {})
-    financials = data_bundle['financials']
-    cashflow = data_bundle['cashflow']
-    balance = data_bundle['balance']
-    divs = data_bundle['dividends']
-    hist_price = data_bundle['history']
-    q_cashflow = data_bundle['q_cashflow']
-    insider_tx = data_bundle['insider']
-
-    with st.spinner(T['loading'] + '...'):
-        
-        # --- PREÇO E MARKET CAP ROBUSTO ---
-        price_curr = fast_info.get('last_price')
-        if not price_curr: price_curr = safe_get(info, 'currentPrice')
-        if not price_curr and not hist_price.empty: price_curr = hist_price['Close'].iloc[-1]
-        if price_curr is None: price_curr = 0.0
-        
-        mkt_cap = fast_info.get('market_cap')
-        if not mkt_cap: mkt_cap = safe_get(info, 'marketCap')
-
-        # --- DATA PROCESSING ---
-        h_net_income = find_line(cashflow, ['net income'])
-        if h_net_income is None: h_net_income = find_line(financials, ['net income'])
-        h_depr = find_line(cashflow, ['depreciation'])
-        if h_depr is None: h_depr = find_line(financials, ['depreciation'])
-        h_capex = find_line(cashflow, ['capital expenditure', 'purchase of ppe', 'property'])
-        h_shares = find_line(balance, ['share issued', 'ordinary shares number'])
-        if h_shares is None: h_shares = find_line(financials, ['basic average shares'])
-        h_ocf = find_line(cashflow, ['operating cash flow', 'total cash from operating activities'])
-
-        df_calc = align_annual_data({'NI': h_net_income, 'DEPR': h_depr, 'CAPEX': h_capex, 'SHARES': h_shares, 'OCF': h_ocf})
-        series_affo_share = None
-        fcf_payout_ratio = None
-        
-        # REIT & DIVIDEND Detection
-        is_reit = False
-        sector = str(info.get('sector', '')).lower()
-        industry = str(info.get('industry', '')).lower()
-        if 'reit' in sector or 'reit' in industry or 'real estate' in sector: is_reit = True
-        
-        has_dividends = False
-        div_yield_check = safe_get(info, 'dividendRate')
-        if div_yield_check and div_yield_check > 0: has_dividends = True
-        if not divs.empty and divs.sum() > 0: has_dividends = True
-
-        if not df_calc.empty:
-            for col in ['NI', 'DEPR', 'CAPEX', 'OCF']: 
-                if col not in df_calc.columns: df_calc[col] = 0
+        # --- CALCULATIONS ---
+        with st.spinner('Calculating...'):
+            price_curr = fast_info.get('last_price')
+            if not price_curr: price_curr = safe_get(info, 'currentPrice')
+            if not price_curr and not hist_price.empty: price_curr = hist_price['Close'].iloc[-1]
+            if price_curr is None: price_curr = 0.0
             
-            # --- CASH METRIC LOGIC ---
+            mkt_cap = fast_info.get('market_cap')
+            if not mkt_cap: mkt_cap = safe_get(info, 'marketCap')
+
+            h_net_income = find_line(cashflow, ['net income'])
+            if h_net_income is None: h_net_income = find_line(financials, ['net income'])
+            h_depr = find_line(cashflow, ['depreciation'])
+            if h_depr is None: h_depr = find_line(financials, ['depreciation'])
+            h_capex = find_line(cashflow, ['capital expenditure', 'purchase of ppe', 'property'])
+            h_shares = find_line(balance, ['share issued', 'ordinary shares number'])
+            if h_shares is None: h_shares = find_line(financials, ['basic average shares'])
+            h_ocf = find_line(cashflow, ['operating cash flow', 'total cash from operating activities'])
+
+            df_calc = align_annual_data({'NI': h_net_income, 'DEPR': h_depr, 'CAPEX': h_capex, 'SHARES': h_shares, 'OCF': h_ocf})
+            series_affo_share = None
+            fcf_payout_ratio = None
+            
+            is_reit = False
+            sector = str(info.get('sector', '')).lower()
+            industry = str(info.get('industry', '')).lower()
+            if 'reit' in sector or 'reit' in industry or 'real estate' in sector: is_reit = True
+            
+            has_dividends = False
+            div_yield_check = safe_get(info, 'dividendRate')
+            if div_yield_check and div_yield_check > 0: has_dividends = True
+            if not divs.empty and divs.sum() > 0: has_dividends = True
+
+            if not df_calc.empty:
+                for col in ['NI', 'DEPR', 'CAPEX', 'OCF']: 
+                    if col not in df_calc.columns: df_calc[col] = 0
+                
+                if is_reit:
+                    if df_calc['OCF'].sum() != 0: df_calc['Cash_Metric'] = df_calc['OCF']
+                    else: df_calc['Cash_Metric'] = df_calc['NI'].fillna(0) + df_calc['DEPR'].fillna(0)
+                else:
+                    df_calc['Cash_Metric'] = df_calc['OCF'].fillna(0) + df_calc['CAPEX'].fillna(0)
+
+                if 'SHARES' in df_calc.columns:
+                    df_calc['SHARES'] = df_calc['SHARES'].replace(0, 1)
+                    df_calc['Cash_Per_Share'] = df_calc['Cash_Metric'] / df_calc['SHARES']
+                    series_affo_share = df_calc['Cash_Per_Share']
+
+            h_divs_paid = find_line(cashflow, ['cash dividends paid', 'dividends paid'])
+            h_fcf = find_line(cashflow, ['free cash flow'])
+            hist_eps = find_line(financials, ['basic eps', 'diluted eps'])
+            hist_debt = find_line(balance, ['total debt', 'long term debt'])
+            
+            h_gross_profit = find_line(financials, ['gross profit'])
+            h_revenue = find_line(financials, ['total revenue', 'operating revenue'])
+            series_gross_margin = None
+            if h_gross_profit is not None and h_revenue is not None:
+                df_gm = align_annual_data({'GP': h_gross_profit, 'Rev': h_revenue})
+                if not df_gm.empty: series_gross_margin = (df_gm['GP'] / df_gm['Rev']) * 100
+
+            h_cash = find_line(balance, ['cash and cash equivalents', 'cash', 'cash & equivalents'])
+            h_ebitda = find_line(financials, ['ebitda', 'normalized ebitda'])
+            if h_ebitda is None and h_net_income is not None and h_depr is not None:
+                 h_ebitda = h_net_income + h_depr 
+            
+            nd_ebitda_val = 0
+            if hist_debt is not None and h_cash is not None and h_ebitda is not None:
+                 last_debt = hist_debt.iloc[-1]
+                 last_cash = h_cash.iloc[-1]
+                 last_ebitda = h_ebitda.iloc[-1]
+                 if last_ebitda > 0: nd_ebitda_val = (last_debt - last_cash) / last_ebitda
+
+            h_ebit = find_line(financials, ['ebit', 'operating income'])
+            h_int_exp = find_line(financials, ['interest expense', 'interest expense non operating'])
+            int_cov_val = 0
+            if h_ebit is not None and h_int_exp is not None:
+                 last_ebit = h_ebit.iloc[-1]
+                 last_int = abs(h_int_exp.iloc[-1])
+                 if last_int > 0: int_cov_val = last_ebit / last_int
+
+            roic_val = 0
+            roe_val = safe_get(info, 'returnOnEquity')*100
+            is_neg_equity = False
+            h_equity = find_line(balance, ['total stockholder equity', 'total equity'])
+            if h_equity is not None:
+                last_equity = h_equity.iloc[-1]
+                if last_equity < 0: is_neg_equity = True
+                if h_ebit is not None and hist_debt is not None:
+                     invested_capital = last_equity + hist_debt.iloc[-1] - (h_cash.iloc[-1] if h_cash is not None else 0)
+                     if invested_capital > 0: roic_val = (h_ebit.iloc[-1] / invested_capital) * 100
+
+            pe_ratio = safe_get(info, 'trailingPE')
+            if not pe_ratio and price_curr: 
+                 eps_ttm = safe_get(info, 'trailingEps')
+                 if eps_ttm and eps_ttm > 0: pe_ratio = price_curr / eps_ttm
+
+            beta_val = safe_get(info, 'beta')
+
+            # --- MOAT SCORE ---
+            moat_score = 0
+            moat_data = [] 
+            
             if is_reit:
-                if df_calc['OCF'].sum() != 0: df_calc['Cash_Metric'] = df_calc['OCF']
-                else: df_calc['Cash_Metric'] = df_calc['NI'].fillna(0) + df_calc['DEPR'].fillna(0)
+                if mkt_cap and mkt_cap > 30_000_000_000: 
+                    moat_score += 1; moat_data.append(("Scale", "Massive Cap", "moat-good"))
+                elif mkt_cap and mkt_cap > 10_000_000_000: moat_data.append(("Scale", "Large Cap", "moat-avg"))
+                else: moat_data.append(("Scale", "Mid/Small", "moat-bad"))
+
+                gm_val_last = series_gross_margin.iloc[-1] if series_gross_margin is not None else 0
+                if gm_val_last > 60: 
+                    moat_score += 1; moat_data.append(("Efficiency", f"GM {round(gm_val_last,1)}%", "moat-good"))
+                elif gm_val_last > 40: moat_data.append(("Efficiency", f"GM {round(gm_val_last,1)}%", "moat-avg"))
+                else: moat_data.append(("Efficiency", f"GM {round(gm_val_last,1)}%", "moat-bad"))
+
+                if nd_ebitda_val < 5.5 and nd_ebitda_val > 0:
+                    moat_score += 1; moat_data.append(("Safety", f"NetDebt {round(nd_ebitda_val,1)}x", "moat-good"))
+                elif nd_ebitda_val < 6.5: moat_data.append(("Safety", f"NetDebt {round(nd_ebitda_val,1)}x", "moat-avg"))
+                else: moat_data.append(("Safety", "High Leverage", "moat-bad"))
+                moat_data.append(("Type", "REIT", "moat-avg"))
             else:
-                df_calc['Cash_Metric'] = df_calc['OCF'].fillna(0) + df_calc['CAPEX'].fillna(0)
-
-            if 'SHARES' in df_calc.columns:
-                df_calc['SHARES'] = df_calc['SHARES'].replace(0, 1)
-                df_calc['Cash_Per_Share'] = df_calc['Cash_Metric'] / df_calc['SHARES']
-                series_affo_share = df_calc['Cash_Per_Share']
-
-        h_divs_paid = find_line(cashflow, ['cash dividends paid', 'dividends paid'])
-        h_fcf = find_line(cashflow, ['free cash flow'])
-        hist_eps = find_line(financials, ['basic eps', 'diluted eps'])
-        hist_debt = find_line(balance, ['total debt', 'long term debt'])
-        
-        # --- METRICS ---
-        h_gross_profit = find_line(financials, ['gross profit'])
-        h_revenue = find_line(financials, ['total revenue', 'operating revenue'])
-        series_gross_margin = None
-        if h_gross_profit is not None and h_revenue is not None:
-            df_gm = align_annual_data({'GP': h_gross_profit, 'Rev': h_revenue})
-            if not df_gm.empty: series_gross_margin = (df_gm['GP'] / df_gm['Rev']) * 100
-
-        h_cash = find_line(balance, ['cash and cash equivalents', 'cash', 'cash & equivalents'])
-        h_ebitda = find_line(financials, ['ebitda', 'normalized ebitda'])
-        if h_ebitda is None and h_net_income is not None and h_depr is not None:
-             h_ebitda = h_net_income + h_depr 
-        
-        nd_ebitda_val = 0
-        if hist_debt is not None and h_cash is not None and h_ebitda is not None:
-             last_debt = hist_debt.iloc[-1]
-             last_cash = h_cash.iloc[-1]
-             last_ebitda = h_ebitda.iloc[-1]
-             if last_ebitda > 0:
-                 nd_ebitda_val = (last_debt - last_cash) / last_ebitda
-
-        h_ebit = find_line(financials, ['ebit', 'operating income'])
-        h_int_exp = find_line(financials, ['interest expense', 'interest expense non operating'])
-        int_cov_val = 0
-        if h_ebit is not None and h_int_exp is not None:
-             last_ebit = h_ebit.iloc[-1]
-             last_int = abs(h_int_exp.iloc[-1])
-             if last_int > 0: int_cov_val = last_ebit / last_int
-
-        roic_val = 0
-        roe_val = safe_get(info, 'returnOnEquity')*100
-        is_neg_equity = False
-        h_equity = find_line(balance, ['total stockholder equity', 'total equity'])
-        if h_equity is not None:
-            last_equity = h_equity.iloc[-1]
-            if last_equity < 0: is_neg_equity = True
-            
-            if h_ebit is not None and hist_debt is not None:
-                 invested_capital = last_equity + hist_debt.iloc[-1] - (h_cash.iloc[-1] if h_cash is not None else 0)
-                 if invested_capital > 0: roic_val = (h_ebit.iloc[-1] / invested_capital) * 100
-
-        pe_ratio = safe_get(info, 'trailingPE')
-        if not pe_ratio and price_curr: 
-             eps_ttm = safe_get(info, 'trailingEps')
-             if eps_ttm and eps_ttm > 0: pe_ratio = price_curr / eps_ttm
-
-        beta_val = safe_get(info, 'beta')
-
-        # --- MOAT CALCULATION ---
-        moat_score = 0
-        moat_data = [] 
-        
-        if is_reit:
-            # REIT LOGIC
-            if mkt_cap and mkt_cap > 30_000_000_000: 
-                moat_score += 1
-                moat_data.append(("Scale", "Massive Cap", "moat-good"))
-            elif mkt_cap and mkt_cap > 10_000_000_000: moat_data.append(("Scale", "Large Cap", "moat-avg"))
-            else: moat_data.append(("Scale", "Mid/Small", "moat-bad"))
-
-            gm_val_last = series_gross_margin.iloc[-1] if series_gross_margin is not None else 0
-            if gm_val_last > 60: 
-                moat_score += 1
-                moat_data.append(("Efficiency", f"GM {round(gm_val_last,1)}%", "moat-good"))
-            elif gm_val_last > 40: moat_data.append(("Efficiency", f"GM {round(gm_val_last,1)}%", "moat-avg"))
-            else: moat_data.append(("Efficiency", f"GM {round(gm_val_last,1)}%", "moat-bad"))
-
-            if nd_ebitda_val < 5.5 and nd_ebitda_val > 0:
-                moat_score += 1
-                moat_data.append(("Safety", f"NetDebt {round(nd_ebitda_val,1)}x", "moat-good"))
-            elif nd_ebitda_val < 6.5: moat_data.append(("Safety", f"NetDebt {round(nd_ebitda_val,1)}x", "moat-avg"))
-            else: moat_data.append(("Safety", "High Leverage", "moat-bad"))
-            
-            moat_data.append(("Type", "REIT", "moat-avg"))
-
-        else:
-            # STANDARD LOGIC
-            if roic_val > 15: 
-                moat_score += 1
-                moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-good"))
-            elif roic_val > 8: moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-avg"))
-            else: moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-bad"))
-            
-            gm_val_last = series_gross_margin.iloc[-1] if series_gross_margin is not None else 0
-            if gm_val_last > 40: 
-                moat_score += 1
-                moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-good"))
-            elif gm_val_last > 20: moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-avg"))
-            else: moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-bad"))
-            
-            pm_val_calc = safe_get(info, 'profitMargins') * 100
-            if pm_val_calc > 15: 
-                moat_score += 1
-                moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-good"))
-            elif pm_val_calc > 5: moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-avg"))
-            else: moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-bad"))
-            
-            if mkt_cap and mkt_cap > 100_000_000_000: 
-                moat_score += 1
-                moat_data.append(("Scale", "Mega Cap", "moat-good"))
-            elif mkt_cap and mkt_cap > 10_000_000_000: moat_data.append(("Scale", "Large Cap", "moat-avg"))
-            else: moat_data.append(("Scale", "Mid/Small", "moat-avg"))
+                if roic_val > 15: 
+                    moat_score += 1; moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-good"))
+                elif roic_val > 8: moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-avg"))
+                else: moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-bad"))
+                
+                gm_val_last = series_gross_margin.iloc[-1] if series_gross_margin is not None else 0
+                if gm_val_last > 40: 
+                    moat_score += 1; moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-good"))
+                elif gm_val_last > 20: moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-avg"))
+                else: moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-bad"))
+                
+                pm_val_calc = safe_get(info, 'profitMargins') * 100
+                if pm_val_calc > 15: 
+                    moat_score += 1; moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-good"))
+                elif pm_val_calc > 5: moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-avg"))
+                else: moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-bad"))
+                
+                if mkt_cap and mkt_cap > 100_000_000_000: 
+                    moat_score += 1; moat_data.append(("Scale", "Mega Cap", "moat-good"))
+                elif mkt_cap and mkt_cap > 10_000_000_000: moat_data.append(("Scale", "Large Cap", "moat-avg"))
+                else: moat_data.append(("Scale", "Mid/Small", "moat-avg"))
 
         # --- INSIDER ---
         insider_label = "Neutral"
         insider_val_str = "N/A"
-        insider_delta_display = "No recent data"
+        insider_delta_display = "No Data"
         net_val_insider = 0
         try:
             if insider_tx is not None and not insider_tx.empty:
@@ -690,42 +736,27 @@ if search_input:
                             txt = str(row['Text']).lower()
                             if 'sale' in txt: is_buy = False
                             elif 'purchase' in txt: is_buy = True
-                        
-                        if is_buy:
-                            net_val_insider += val
-                            buy_count += 1
-                        else:
-                            net_val_insider -= val 
-                            sell_count += 1
+                        if is_buy: net_val_insider += val; buy_count += 1
+                        else: net_val_insider -= val; sell_count += 1
                 
-                if net_val_insider > 0:
-                    insider_label = "Net Buying"
-                    insider_val_str = format_large_number(net_val_insider)
-                elif net_val_insider < 0:
-                    insider_label = "Net Selling"
-                    insider_val_str = format_large_number(net_val_insider).replace("-", "") 
-                else:
-                    insider_label = "Neutral"
-                    insider_val_str = "$0"
-                insider_delta_display = f"{buy_count} Buys vs {sell_count} Sells"
+                if net_val_insider > 0: insider_label = "Net Buying"; insider_val_str = format_large_number(net_val_insider)
+                elif net_val_insider < 0: insider_label = "Net Selling"; insider_val_str = format_large_number(net_val_insider).replace("-", "") 
+                insider_delta_display = f"{buy_count} Buys / {sell_count} Sells"
         except: pass
 
         # --- DIVIDENDS & PAYOUT ---
         cagr_3, cagr_5 = 0, 0
         annual_divs = pd.Series()
         series_divs_history = None
-        
         if has_dividends and not divs.empty:
             annual_divs = divs.resample('YE').sum()
             series_divs_history = annual_divs
             clean_divs = annual_divs.copy()
-            if len(clean_divs) > 2:
-                if clean_divs.iloc[-1] < (clean_divs.iloc[-2] * 0.7): clean_divs = clean_divs[:-1]
+            if len(clean_divs) > 2 and clean_divs.iloc[-1] < (clean_divs.iloc[-2] * 0.7): clean_divs = clean_divs[:-1]
             if len(clean_divs) >= 4: cagr_3 = calculate_cagr(clean_divs.iloc[-4], clean_divs.iloc[-1], 3) * 100
             if len(clean_divs) >= 6: cagr_5 = calculate_cagr(clean_divs.iloc[-6], clean_divs.iloc[-1], 5) * 100
             
-            # --- PAYOUT CALCULATION SECTION (REIT FIX) ---
-            # 1. Se for REIT, tentamos primeiro o TTM OCF do Info (Mais fiável)
+            # Payout Logic
             if is_reit:
                 ttm_ocf = safe_get(info, 'operatingCashflow')
                 if ttm_ocf and ttm_ocf > 0:
@@ -734,41 +765,25 @@ if search_input:
                     if div_rate and shares:
                         total_div_est = div_rate * shares
                         fcf_payout_ratio = (total_div_est / ttm_ocf) * 100
-
-            # 2. Se falhar (ou não for REIT), tentamos cálculo manual
+            
             if fcf_payout_ratio is None:
                 try:
+                    # Manual Calc
                     if q_cashflow is not None and not q_cashflow.empty:
                         line_ocf = find_line(q_cashflow, ['operating cash flow', 'total cash from operating activities'])
                         line_capex = find_line(q_cashflow, ['capital expenditure', 'purchase of ppe'])
-                        
                         if line_ocf is not None:
                             ttm_ocf = line_ocf.iloc[:4].sum()
-                            
-                            if is_reit:
-                                manual_cash_metric = ttm_ocf
+                            if is_reit: manual_cash_metric = ttm_ocf
                             else:
                                 ttm_capex = 0
                                 if line_capex is not None: ttm_capex = line_capex.iloc[:4].sum() 
                                 manual_cash_metric = ttm_ocf + ttm_capex
-                            
                             div_rate = safe_get(info, 'dividendRate')
                             shares = safe_get(info, 'sharesOutstanding')
-                            
                             if manual_cash_metric > 0 and div_rate > 0 and shares > 0:
                                 total_div_est = div_rate * shares
                                 fcf_payout_ratio = (total_div_est / manual_cash_metric) * 100
-                except: pass
-
-            # 3. Fallback (Info FreeCashflow)
-            if fcf_payout_ratio is None:
-                try:
-                    ttm_fcf = safe_get(info, 'freeCashFlow')
-                    div_rate = safe_get(info, 'dividendRate')
-                    shares = safe_get(info, 'sharesOutstanding')
-                    if ttm_fcf and ttm_fcf > 0 and div_rate > 0 and shares > 0:
-                        total_div_est = div_rate * shares
-                        fcf_payout_ratio = (total_div_est / ttm_fcf) * 100
                 except: pass
 
         series_yield_history = None
@@ -782,7 +797,7 @@ if search_input:
 
         news_items = get_google_news(ticker)
 
-        # --- DASHBOARD DISPLAY ---
+        # --- DISPLAY ---
         st.header(f"{info.get('longName', ticker)}")
         st.caption(f"Symbol: {ticker} | Sector: {info.get('sector', 'N/A')} | Industry: {info.get('industry', 'N/A')}")
         with st.expander("Business Description", expanded=False):
@@ -798,21 +813,19 @@ if search_input:
         
         if has_dividends:
             div_rate_val = safe_get(info, 'dividendRate')
-            if price_curr > 0:
-                div_yield_val = (div_rate_val / price_curr * 100)
+            if price_curr > 0: div_yield_val = (div_rate_val / price_curr * 100)
             
-            final_payout_label = "Payout (FCF-TTM)"
+            final_payout_label = "Payout (Cash Flow)"
             
             if fcf_payout_ratio is not None and 0 < fcf_payout_ratio < 500:
                 final_payout_val = fcf_payout_ratio
-                if is_reit: final_payout_label = "Payout (Est. OCF/FFO)"
             else:
                 if not is_reit:
                     final_payout_val = safe_get(info, 'payoutRatio') * 100
                     final_payout_label = "Payout (GAAP)"
                 else:
                     final_payout_val = 0
-                    final_payout_label = "Payout (Data N/A)"
+                    final_payout_label = "Payout (N/A)"
 
             p_txt, p_col = get_metric_status(final_payout_val, is_reit, 'payout')
             m2.metric(T['yield'], f"{round(div_yield_val, 2)}%")
@@ -822,18 +835,6 @@ if search_input:
             pm_val = safe_get(info, 'profitMargins') * 100
             pm_txt, pm_col = get_metric_status(pm_val, is_reit, 'profit_margin')
             m3.metric(T['profit_margin'], f"{round(pm_val, 2)}%", pm_txt, delta_color=pm_col)
-
-        # 52 WEEK
-        h52 = safe_get(info, 'fiftyTwoWeekHigh')
-        l52 = safe_get(info, 'fiftyTwoWeekLow')
-        if h52 and l52 and price_curr:
-            pct = max(0.0, min(1.0, (price_curr - l52) / (h52 - l52)))
-            st.write("")
-            st.markdown("**52-Week Range**", help="Low vs High")
-            st.progress(pct)
-            cmin, cmax = st.columns(2)
-            cmin.caption(f"Low: ${l52}")
-            cmax.caption(f"High: ${h52}")
 
         st.divider()
 
@@ -899,10 +900,7 @@ if search_input:
         
         roe_display = f"{round(roe_val, 2)}%"
         roe_txt, roe_col = get_metric_status(roe_val, is_reit, 'roe')
-        if is_neg_equity:
-            roe_display = "Neg. Equity"
-            roe_txt = "Alert"
-            roe_col = "off"
+        if is_neg_equity: roe_display = "Neg. Equity"; roe_txt = "Alert"; roe_col = "off"
 
         roic_txt, roic_col = get_metric_status(roic_val, is_reit, 'roic')
         gm_val = series_gross_margin.iloc[-1] if series_gross_margin is not None else 0
@@ -955,8 +953,7 @@ if search_input:
                  st.metric("ROIC", f"{round(roic_val, 2)}%", roic_txt, delta_color=roic_col)
              with col_g3:
                  pe_fmt = "N/A"
-                 if not is_reit:
-                     pe_fmt = f"{round(pe_ratio, 1)}" if pe_ratio else "N/A"
+                 if not is_reit: pe_fmt = f"{round(pe_ratio, 1)}" if pe_ratio else "N/A"
                  st.metric("P/E Ratio", pe_fmt)
                  p_fcf_display = "N/A"
                  if series_affo_share is not None and price_curr:
@@ -967,7 +964,6 @@ if search_input:
                  st.metric("P/FCF", p_fcf_display)
              
              st.write("")
-             # VISUAL MOAT CARDS
              st.markdown(f"##### {T['moat_title']}")
              moat_html = f"""
              <div class="moat-container">
@@ -980,7 +976,7 @@ if search_input:
 
         st.divider()
 
-        # IV. SAFETY (Conditional)
+        # IV. SAFETY
         st.markdown(f"### {T['safety_title']}")
         df_div_safety = pd.DataFrame()
         df_debt_safety = pd.DataFrame()
@@ -1027,7 +1023,7 @@ if search_input:
             if news_items:
                 for n in news_items: st.markdown(f"<div class='news-item'><a href='{n['link']}' class='news-link' target='_blank'>• {n['title']}</a><span class='news-meta'>{n['date']}</span></div>", unsafe_allow_html=True)
             else:
-                st.info("Live feed currently unavailable.")
+                st.info("Live feed unavailable.")
                 st.markdown(f"<a href='https://finance.yahoo.com/quote/{ticker}/news' target='_blank' class='fallback-btn'>Read Full News Coverage ➔</a>", unsafe_allow_html=True)
 
         # --- AUTO SUMMARY ---
@@ -1065,7 +1061,7 @@ if search_input:
         # --- VI. COMPETITORS ---
         st.divider(); st.markdown(f"### {T['comp_title']}")
         col_comp_input, _ = st.columns([3, 1])
-        with col_comp_input: peers_input = st.text_input(T['comp_input'], placeholder=T['comp_placeholder'])
+        with col_comp_input: peers_input = st.text_input(T['comp_input'], placeholder="Ex: KO, PEP, MNST")
         
         if peers_input:
             with st.spinner(f"{T['loading']}..."):
@@ -1076,7 +1072,6 @@ if search_input:
                     try:
                         p_stock = yf.Ticker(t)
                         p_info = p_stock.info
-                        # Try fast info for competitors too
                         p_price = p_stock.fast_info.last_price
                         if not p_price: p_price = safe_get(p_info, 'currentPrice')
                         
@@ -1090,7 +1085,7 @@ if search_input:
                 if comp_data:
                     df_comp = pd.DataFrame(comp_data).set_index("Ticker")
                     st.dataframe(df_comp.style.format("{:.2f}").highlight_max(subset=["Yield (%)", "ROE (%)", "Net Mg (%)"], color='#d4edda').highlight_min(subset=["P/E", "Debt/Eq", "Payout (%)"], color='#d4edda'), use_container_width=True)
-                else: st.warning("Sem dados.")
+                else: st.warning(T['no_data'])
 
         st.write(""); st.write(""); st.markdown("---")
         st.markdown(f"<div style='text-align: center; color: #888; font-size: 0.8rem;'>{T['footer']}</div>", unsafe_allow_html=True)
