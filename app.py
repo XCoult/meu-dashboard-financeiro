@@ -6,6 +6,7 @@ import altair as alt
 import requests
 import xml.etree.ElementTree as ET
 import time
+import random
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Paulo Moura Dashboard", layout="wide")
@@ -17,51 +18,16 @@ st.markdown("""
     h3 { margin-top: 2rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.5rem; font-family: 'Arial', sans-serif; color: #333; }
     h5 { color: #666; font-weight: 500; font-size: 0.9rem; margin-bottom: 0.5rem; }
     .stProgress > div > div > div > div { background-color: #87CEFA; }
-    
-    div.stButton > button {
-        background-color: #f0f2f6;
-        color: #31333F;
-        border: 1px solid #d6d6d6;
-    }
-    div.stButton > button:hover {
-        border-color: #31333F;
-        color: #31333F;
-    }
-    
+    div.stButton > button { background-color: #f0f2f6; color: #31333F; border: 1px solid #d6d6d6; }
+    div.stButton > button:hover { border-color: #31333F; color: #31333F; }
     a.news-link { text-decoration: none; color: #1f77b4; font-weight: 600; font-size: 0.90rem; display: block; margin-bottom: 2px;}
     a.news-link:hover { text-decoration: underline; color: #004085; }
     .news-meta { color: #888; font-size: 0.75rem; margin-bottom: 12px; display: block; border-bottom: 1px solid #eee; padding-bottom: 8px;}
-    
-    .fallback-btn {
-        display: inline-block;
-        padding: 10px 20px;
-        background-color: #4169E1;
-        color: white !important;
-        text-decoration: none;
-        border-radius: 5px;
-        font-weight: bold;
-        margin-top: 10px;
-    }
-    
+    .fallback-btn { display: inline-block; padding: 10px 20px; background-color: #4169E1; color: white !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
     .welcome-container { text-align: center; margin-top: 50px; color: #666; }
-    
-    /* MOAT CARDS STYLING */
-    .moat-container {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 20px;
-        flex-wrap: wrap;
-    }
-    .moat-card {
-        flex: 1;
-        min-width: 140px;
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 8px;
-        text-align: center;
-        border: 1px solid #e0e0e0;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
+    /* MOAT CARDS */
+    .moat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .moat-card { flex: 1; min-width: 140px; background-color: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .moat-label { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
     .moat-value { font-size: 1.1rem; font-weight: 700; color: #333; }
     .moat-good { border-top: 4px solid #28a745; }
@@ -110,7 +76,7 @@ def format_large_number(num):
     elif num >= 1_000: return f"${num/1_000:.0f}K"
     else: return f"${num:.0f}"
 
-# --- SMART TRAFFIC LIGHT LOGIC ---
+# --- TRAFFIC LIGHT LOGIC ---
 def get_metric_status(value, is_reit, metric_type):
     if value is None: return None, "off"
     
@@ -165,11 +131,11 @@ def get_metric_status(value, is_reit, metric_type):
 
     return None, "off"
 
-# --- SMART SEARCH ---
+# --- SEARCH & NEWS ---
 def search_symbol(query):
     try:
         url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=5)
         data = response.json()
         if 'quotes' in data and len(data['quotes']) > 0:
@@ -177,7 +143,6 @@ def search_symbol(query):
     except: pass
     return query.upper()
 
-# --- GOOGLE NEWS ---
 def get_google_news(ticker):
     try:
         url = f"https://news.google.com/rss/search?q={ticker}+stock+finance&hl=en-US&gl=US&ceid=US:en"
@@ -196,55 +161,54 @@ def get_google_news(ticker):
     except: return []
     return []
 
-# --- FETCH DATA WITH CACHE (CRITICAL FIX) ---
-# Esta função guarda os dados em cache para não pedir sempre ao Yahoo
-@st.cache_data(ttl=3600) # Guarda os dados por 1 hora
+# --- ROBUST DATA FETCHING (RETRY LOGIC) ---
+@st.cache_data(ttl=3600, show_spinner=False)
 def fetch_stock_data(ticker):
+    # Tenta 3 vezes com pausas
+    max_retries = 3
     stock = yf.Ticker(ticker)
     
-    # 1. Tentar obter histórico primeiro (por vezes "desbloqueia" o cookie)
-    try:
-        history = stock.history(period="10y")
-        if history.empty:
-            return None
-    except Exception as e:
-        # Se falhar, tentamos esperar 1 segundo e tentar de novo
-        time.sleep(1)
+    for i in range(max_retries):
         try:
-            history = stock.history(period="10y")
-        except:
-            return None
+            # Tentar uma chamada leve primeiro para ver se funciona
+            history = stock.history(period="5d")
+            
+            if not history.empty:
+                # Se funcionou, busca o resto
+                try: info = stock.info
+                except: info = {}
+                
+                financials = stock.financials
+                cashflow = stock.cashflow
+                balance = stock.balance_sheet
+                divs = stock.dividends
+                q_cashflow = stock.quarterly_cashflow
+                
+                # Fetch long history separately
+                long_history = stock.history(period="10y")
+                
+                insider = None
+                try: insider = stock.insider_transactions
+                except: pass
 
-    # 2. Obter Info com tratamento de erro
-    try:
-        info = stock.info
-    except Exception:
-        info = {} # Se falhar o info, tentamos continuar com dados vazios
-    
-    # 3. Obter restantes tabelas
-    financials = stock.financials
-    cashflow = stock.cashflow
-    balance = stock.balance_sheet
-    divs = stock.dividends
-    q_cashflow = stock.quarterly_cashflow
-    insider = None
-    try:
-        insider = stock.insider_transactions
-    except: pass
+                return {
+                    "stock_obj": stock,
+                    "info": info,
+                    "history": long_history,
+                    "financials": financials,
+                    "cashflow": cashflow,
+                    "balance": balance,
+                    "dividends": divs,
+                    "q_cashflow": q_cashflow,
+                    "insider": insider
+                }
+        except Exception:
+            # Se falhar, espera 2, 4, 6 segundos e tenta de novo
+            time.sleep((i + 1) * 2)
+            
+    return None # Falhou todas as tentativas
 
-    return {
-        "stock_obj": stock, # Guardamos o objeto para coisas extra
-        "info": info,
-        "history": history,
-        "financials": financials,
-        "cashflow": cashflow,
-        "balance": balance,
-        "dividends": divs,
-        "q_cashflow": q_cashflow,
-        "insider": insider
-    }
-
-# --- CHARTING ---
+# --- CHARTING FUNCTIONS ---
 def create_altair_chart(data, bar_color, value_format='$.2f', y_title=''):
     try:
         if data is None or data.empty: return None
@@ -252,19 +216,16 @@ def create_altair_chart(data, bar_color, value_format='$.2f', y_title=''):
         if hasattr(data.index, 'strftime'): years = data.index.strftime('%Y')
         else: years = data.index.astype(str)
 
-        if isinstance(data, pd.Series):
-             df_chart = pd.DataFrame({'Year': years, 'Value': data.values})
+        if isinstance(data, pd.Series): df_chart = pd.DataFrame({'Year': years, 'Value': data.values})
         elif isinstance(data, pd.DataFrame):
              df_chart = data.copy()
              df_chart['Year'] = years
              if 'Value' not in df_chart.columns: df_chart['Value'] = df_chart.iloc[:, 0]
 
-        df_chart = df_chart.dropna()
-        if not df_chart.empty: df_chart = df_chart.sort_values('Year').tail(10)
+        df_chart = df_chart.dropna().sort_values('Year').tail(10)
+        if df_chart.empty: return None
 
-        chart = alt.Chart(df_chart).mark_bar(
-            width=30, color=bar_color, stroke='black', strokeWidth=0
-        ).encode(
+        chart = alt.Chart(df_chart).mark_bar(width=30, color=bar_color).encode(
             x=alt.X('Year', axis=alt.Axis(title='', labelAngle=0), scale=alt.Scale(padding=0.3)),
             y=alt.Y('Value', axis=alt.Axis(title=y_title, format=value_format, grid=True, gridColor='#f0f0f0')),
             tooltip=['Year', alt.Tooltip('Value', format=value_format)]
@@ -279,22 +240,21 @@ def create_line_chart(data, line_color, value_format='$.2f'):
         if hasattr(data.index, 'strftime'): years = data.index.strftime('%Y')
         else: years = data.index.astype(str)
 
-        if isinstance(data, pd.Series):
-             df_chart = pd.DataFrame({'Year': years, 'Value': data.values})
+        if isinstance(data, pd.Series): df_chart = pd.DataFrame({'Year': years, 'Value': data.values})
         elif isinstance(data, pd.DataFrame):
              df_chart = data.copy()
              df_chart['Year'] = years
              if 'Value' not in df_chart.columns: df_chart['Value'] = df_chart.iloc[:, 0]
 
-        df_chart = df_chart.dropna()
-        if not df_chart.empty: df_chart = df_chart.sort_values('Year').tail(10)
+        df_chart = df_chart.dropna().sort_values('Year').tail(10)
+        if df_chart.empty: return None
 
         line = alt.Chart(df_chart).mark_line(color=line_color, strokeWidth=3).encode(
             x=alt.X('Year', axis=alt.Axis(title='', labelAngle=0)),
             y=alt.Y('Value', axis=alt.Axis(title='', format=value_format, grid=True, gridColor='#f0f0f0')),
              tooltip=['Year', alt.Tooltip('Value', format=value_format)]
         )
-        points = alt.Chart(df_chart).mark_circle(size=80, color=line_color, opacity=1).encode(
+        points = alt.Chart(df_chart).mark_circle(size=80, color=line_color).encode(
             x='Year', y='Value', tooltip=['Year', alt.Tooltip('Value', format=value_format)]
         )
         return (line + points).properties(height=220)
@@ -333,9 +293,17 @@ with col_btn:
     st.write("") 
     search = st.button("🔍 Search") 
 
+# --- SIDEBAR ---
+with st.sidebar:
+    st.header("⚙️ Opções")
+    if st.button("🔄 Atualizar Dados Agora", help="Limpa a memória e força download."):
+        st.cache_data.clear()
+        st.rerun()
+    st.info("Atualização automática a cada 60 min para evitar bloqueios.")
+
 # --- MAIN LOGIC ---
 if not search_input:
-    st.markdown("<div class='welcome-container'><h3>👋 Welcome!</h3><p>Enter a stock ticker (e.g., <b>O</b>, <b>AAPL</b>) or company name to start analyzing.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='welcome-container'><h3>👋 Welcome!</h3><p>Enter a stock ticker (e.g., <b>O</b>, <b>AAPL</b>).</p></div>", unsafe_allow_html=True)
 
 if search_input:
     ticker = search_input.upper()
@@ -344,18 +312,15 @@ if search_input:
             found_ticker = search_symbol(search_input)
             if found_ticker: ticker = found_ticker
 
-    # 1. Fetch Data with Cache Handling
-    data_bundle = None
-    try:
+    # 1. Fetch Data (With Retry Logic)
+    with st.spinner(f"Connecting to Yahoo Finance for {ticker}..."):
         data_bundle = fetch_stock_data(ticker)
-    except Exception as e:
-        st.error(f"Erro ao ligar ao Yahoo Finance (Rate Limit). Por favor, aguarda uns segundos e tenta novamente.")
-        st.stop()
     
-    if data_bundle is None or data_bundle['history'].empty:
-        st.error(f"Não foram encontrados dados para '{ticker}'.")
+    if data_bundle is None:
+        st.error(f"Erro ao obter dados para '{ticker}'. O Yahoo pode estar a bloquear o acesso temporariamente. Aguarda 1 minuto e tenta 'Atualizar Dados'.")
         st.stop()
 
+    # Unpack Data
     stock = data_bundle['stock_obj']
     info = data_bundle['info']
     financials = data_bundle['financials']
@@ -366,7 +331,7 @@ if search_input:
     q_cashflow = data_bundle['q_cashflow']
     insider_tx = data_bundle['insider']
 
-    with st.spinner(f'Analyzing {ticker}...'):
+    with st.spinner('Calculating Metrics...'):
         
         # 2. Process Data
         h_net_income = find_line(cashflow, ['net income'])
@@ -562,35 +527,24 @@ if search_input:
             
             # --- SUPER ROBUST PAYOUT CALCULATION (MANUAL CONSTRUCTION) ---
             try:
-                # 1. Fetch Quarterly Cashflow
                 if q_cashflow is not None and not q_cashflow.empty:
-                    # Get OCF line
                     line_ocf = find_line(q_cashflow, ['operating cash flow', 'total cash from operating activities'])
-                    # Get Capex line
                     line_capex = find_line(q_cashflow, ['capital expenditure', 'purchase of ppe'])
                     
                     if line_ocf is not None:
-                        # Sum last 4 quarters
                         ttm_ocf = line_ocf.iloc[:4].sum()
-                        
                         ttm_capex = 0
                         if line_capex is not None:
-                            ttm_capex = line_capex.iloc[:4].sum() # Capex is usually negative
-                        
-                        # FCF = OCF + Capex (if capex is negative)
+                            ttm_capex = line_capex.iloc[:4].sum() 
                         manual_ttm_fcf = ttm_ocf + ttm_capex
-                        
-                        # Get Dividends Paid TTM
-                        # Estimate via rate * shares (most accurate for forward looking)
                         div_rate = safe_get(info, 'dividendRate')
                         shares = safe_get(info, 'sharesOutstanding')
-                        
                         if manual_ttm_fcf > 0 and div_rate > 0 and shares > 0:
                             total_div_est = div_rate * shares
                             fcf_payout_ratio = (total_div_est / manual_ttm_fcf) * 100
             except: pass
 
-            # Fallback 2: Info TTM (if manual failed)
+            # Fallback 2: Info TTM
             if fcf_payout_ratio is None:
                 try:
                     ttm_fcf = safe_get(info, 'freeCashFlow')
@@ -627,14 +581,10 @@ if search_input:
         m1, m2, m3 = st.columns(3)
         m1.metric("Price", f"${price_curr}")
         
-        # Variable to store final payout for summary
         final_payout_val = 0
-
         if has_dividends:
             final_payout_label = "Payout (FCF-TTM)"
             final_payout_help = "Dividends / Free Cash Flow (Trailing 12 Months). Shows the real cash safety."
-            
-            # Use calculated FCF Payout if valid, else fallback to GAAP
             if fcf_payout_ratio is not None and 0 < fcf_payout_ratio < 500:
                 final_payout_val = fcf_payout_ratio
                 if is_reit: final_payout_label = "Payout (Est. AFFO)"
@@ -642,9 +592,7 @@ if search_input:
                 final_payout_val = safe_get(info, 'payoutRatio') * 100
                 final_payout_label = "Payout (GAAP)"
                 final_payout_help = "Earnings payout (Less reliable than FCF)."
-
             p_txt, p_col = get_metric_status(final_payout_val, is_reit, 'payout')
-            
             m2.metric("Yield", f"{round(div_yield_val, 2)}%")
             m3.metric(final_payout_label, f"{round(final_payout_val, 1)}%", p_txt, delta_color=p_col, help=final_payout_help)
         else:
@@ -710,7 +658,6 @@ if search_input:
             debt_txt, debt_col = get_metric_status(nd_ebitda_val, is_reit, 'net_debt_ebitda')
             int_txt, int_col = get_metric_status(int_cov_val, is_reit, 'int_cov')
             beta_txt, beta_col = get_metric_status(beta_val, is_reit, 'beta')
-            
             int_help = "EBIT / Interest Expense. Shows how easily a company can pay interest on its outstanding debt.\n\n• < 1.5x: DANGER (Zombie Company risk)\n• 1.5x - 3.0x: Caution\n• > 3.0x: Safe\n• > 10x: Rock Solid"
 
             with col_s1:
@@ -719,7 +666,6 @@ if search_input:
             with col_s2:
                 ins_col = "normal" if insider_label == "Net Buying" else "inverse" if insider_label == "Net Selling" else "off"
                 st.metric("Insider Trend (6M)", insider_label, insider_delta_display, delta_color=ins_col, help=f"Total Value: {insider_val_str}")
-                
                 beta_fmt = f"{round(beta_val, 2)}" if beta_val else "N/A"
                 st.metric("Beta", beta_fmt, beta_txt, delta_color=beta_col, help="Volatility. 1.0 = Market. < 0.8 = Defensive (Ideal for Safety).")
 
@@ -793,28 +739,24 @@ if search_input:
                  if not is_reit:
                      pe_fmt = f"{round(pe_ratio, 1)}" if pe_ratio else "N/A"
                  st.metric("P/E Ratio", pe_fmt, help="Price vs Earnings. (Ignored for REITs).")
-                 
                  p_fcf_display = "N/A"
                  if series_affo_share is not None and price_curr:
                      last_cash_per_share = series_affo_share.iloc[-1]
                      if last_cash_per_share > 0:
                          val_pfcf = price_curr / last_cash_per_share
                          p_fcf_display = f"{round(val_pfcf, 1)}"
-                 
                  st.metric("P/FCF", p_fcf_display, help="Price vs Free Cash Flow per Share. Ideal: < 15.")
              
              st.write("")
              # VISUAL MOAT CARDS
              st.markdown("##### 🏰 Competitive Advantage (Moat)")
-             
              moat_html = f"""
              <div class="moat-container">
                 <div class="moat-card {moat_data[0][2]}"><div class="moat-label">{moat_data[0][0]}</div><div class="moat-value">{moat_data[0][1]}</div></div>
                 <div class="moat-card {moat_data[1][2]}"><div class="moat-label">{moat_data[1][0]}</div><div class="moat-value">{moat_data[1][1]}</div></div>
                 <div class="moat-card {moat_data[2][2]}"><div class="moat-label">{moat_data[2][0]}</div><div class="moat-value">{moat_data[2][1]}</div></div>
                 <div class="moat-card {moat_data[3][2]}"><div class="moat-label">{moat_data[3][0]}</div><div class="moat-value">{moat_data[3][1]}</div></div>
-             </div>
-             """
+             </div>"""
              st.markdown(moat_html, unsafe_allow_html=True)
 
         st.divider()
@@ -823,7 +765,6 @@ if search_input:
         st.markdown("### IV. Cash Flow & Solvency Analysis")
         df_div_safety = pd.DataFrame()
         df_debt_safety = pd.DataFrame()
-        
         if h_divs_paid is not None and h_fcf is not None:
             df_div_safety = align_annual_data({'Free Cash Flow': h_fcf, 'Dividends Paid': h_divs_paid.abs()})
         if h_fcf is not None and hist_debt is not None:
@@ -833,18 +774,15 @@ if search_input:
             c_safe_1, c_safe_2 = st.columns(2)
             with c_safe_1:
                 st.markdown("##### Dividend Safety (FCF vs Dividends)", help="Gray bar (Cash) should cover Green bar (Divs).")
-                if not df_div_safety.empty:
-                    st.altair_chart(create_grouped_bar_chart(df_div_safety, {'Free Cash Flow': '#2F4F4F', 'Dividends Paid': '#228B22'}), use_container_width=True)
+                if not df_div_safety.empty: st.altair_chart(create_grouped_bar_chart(df_div_safety, {'Free Cash Flow': '#2F4F4F', 'Dividends Paid': '#228B22'}), use_container_width=True)
                 else: st.warning("No Data")
             with c_safe_2:
                 st.markdown("##### Solvency (FCF vs Total Debt)", help="Visualizes Leverage. How many years of FCF to pay off Debt?")
-                if not df_debt_safety.empty:
-                    st.altair_chart(create_grouped_bar_chart(df_debt_safety, {'Free Cash Flow': '#2F4F4F', 'Total Debt': '#800000'}), use_container_width=True)
+                if not df_debt_safety.empty: st.altair_chart(create_grouped_bar_chart(df_debt_safety, {'Free Cash Flow': '#2F4F4F', 'Total Debt': '#800000'}), use_container_width=True)
                 else: st.warning("No Data")
         else:
             st.markdown("##### Solvency (FCF vs Total Debt)")
-            if not df_debt_safety.empty:
-                st.altair_chart(create_grouped_bar_chart(df_debt_safety, {'Free Cash Flow': '#2F4F4F', 'Total Debt': '#800000'}), use_container_width=True)
+            if not df_debt_safety.empty: st.altair_chart(create_grouped_bar_chart(df_debt_safety, {'Free Cash Flow': '#2F4F4F', 'Total Debt': '#800000'}), use_container_width=True)
             else: st.warning("No Data")
 
         st.divider()
@@ -853,7 +791,6 @@ if search_input:
         st.markdown("### V. Analyst Estimates & News")
         target_price = safe_get(info, 'targetMeanPrice')
         recommendation = safe_get(info, 'recommendationKey', 'N/A').title()
-        
         col_metrics, col_news = st.columns([1, 2])
         with col_metrics:
             st.markdown("##### Wall St. Consensus")
@@ -866,50 +803,31 @@ if search_input:
         with col_news:
             st.markdown("##### Latest Headlines (Google News)")
             if news_items:
-                for n in news_items:
-                    st.markdown(f"<div class='news-item'><a href='{n['link']}' class='news-link' target='_blank'>• {n['title']}</a><span class='news-meta'>{n['date']}</span></div>", unsafe_allow_html=True)
+                for n in news_items: st.markdown(f"<div class='news-item'><a href='{n['link']}' class='news-link' target='_blank'>• {n['title']}</a><span class='news-meta'>{n['date']}</span></div>", unsafe_allow_html=True)
             else:
                 st.info("Live feed currently unavailable.")
                 st.markdown(f"<a href='https://finance.yahoo.com/quote/{ticker}/news' target='_blank' class='fallback-btn'>Read Full News Coverage ➔</a>", unsafe_allow_html=True)
 
-        # --- AUTO SUMMARY (PRO REPORT) ---
-        st.write("")
-        st.markdown("### 🤖 Automated Analysis")
-        
-        bull_points = []
-        bear_points = []
-        
-        # 1. VALUATION (Smart P/E check)
+        # --- AUTO SUMMARY ---
+        st.write(""); st.markdown("### 🤖 Automated Analysis")
+        bull_points, bear_points = [], []
         if pe_ratio:
             if not is_reit:
                 if pe_ratio < 15: bull_points.append(f"**Value Territory:** P/E Ratio of {round(pe_ratio, 1)} suggests the stock is inexpensive.")
                 elif pe_ratio > 50: bear_points.append(f"**Expensive Valuation:** P/E Ratio of {round(pe_ratio, 1)} is very high.")
-        
-        # 2. EFFICIENCY
         if roic_val > 15: bull_points.append(f"**High Capital Efficiency:** ROIC of {round(roic_val, 1)}% indicates strong management.")
-        
-        # 3. SENTIMENT
         if target_price and price_curr:
             upside = ((target_price - price_curr) / price_curr) * 100
             if upside > 15: bull_points.append(f"**Analyst Conviction:** Wall St. sees {round(upside, 1)}% upside potential.")
-        
-        # 4. DEBT
         d_limit = 6.0 if is_reit else 3.0
         if nd_ebitda_val < d_limit: bull_points.append(f"**Solid Balance Sheet:** Net Debt/EBITDA is safe at {round(nd_ebitda_val, 1)}x.")
         else: bear_points.append(f"**Leverage Risk:** Net Debt/EBITDA is elevated at {round(nd_ebitda_val, 1)}x.")
-        
-        # 5. DIVIDEND
         if has_dividends:
             p_limit = 90 if is_reit else 75
-            
-            # Use calculated final_payout_val
             if final_payout_val < p_limit: bull_points.append(f"**Safe Dividend:** Cash Payout Ratio is {round(final_payout_val, 1)}% (Well covered).")
             else: bear_points.append(f"**Dividend Pressure:** Cash Payout Ratio is {round(final_payout_val, 1)}% (High).")
-            
             c_limit = 8 if is_reit else 12
             if (div_yield_val + cagr_5) > c_limit: bull_points.append(f"**Chowder Check Passed:** Attractive Yield + Growth combo.")
-        
-        # 6. INSIDER
         if net_val_insider > 0: bull_points.append("**Insider Confidence:** Management has been net buying recently.")
         
         sc1, sc2 = st.columns(2)
@@ -917,149 +835,70 @@ if search_input:
             st.success("🟢 The Bull Case (Strengths)")
             for p in bull_points: st.markdown(f"- {p}")
             if not bull_points: st.write("None.")
-            
         with sc2:
             st.error("🔴 The Bear Case (Risks)")
             for p in bear_points: st.markdown(f"- {p}")
             if not bear_points: st.write("None.")
 
-        # --- VI. COMPETITOR COMPARISON ---
-        st.divider()
-        st.markdown("### VI. Comparação com Competidores")
-        
-        col_comp_input, col_comp_help = st.columns([3, 1])
-        with col_comp_input:
-            peers_input = st.text_input("Adicionar concorrentes para comparar (separados por vírgula):", 
-                                    placeholder="Ex: KO, PEP, MNST (se estiver analisando bebidas)")
+        # --- VI. COMPETITORS ---
+        st.divider(); st.markdown("### VI. Comparação com Competidores")
+        col_comp_input, _ = st.columns([3, 1])
+        with col_comp_input: peers_input = st.text_input("Adicionar concorrentes (sep. por vírgula):", placeholder="Ex: KO, PEP, MNST")
         
         if peers_input:
-            with st.spinner("Buscando dados dos competidores..."):
+            with st.spinner("Comparando..."):
                 tickers_to_compare = [t.strip().upper() for t in peers_input.split(",") if t.strip()]
-                # Adiciona o ticker principal à lista se não estiver
-                if ticker not in tickers_to_compare:
-                    tickers_to_compare.insert(0, ticker)
-                
+                if ticker not in tickers_to_compare: tickers_to_compare.insert(0, ticker)
                 comp_data = []
-                
                 for t in tickers_to_compare:
                     try:
-                        # [CORREÇÃO FINAL] Removido o argumento 'session='
                         p_stock = yf.Ticker(t)
                         p_info = p_stock.info
-                        
-                        # Cálculos rápidos
-                        p_price = safe_get(p_info, 'currentPrice')
-                        p_pe = safe_get(p_info, 'trailingPE')
-                        p_fwd_pe = safe_get(p_info, 'forwardPE')
-                        p_div_yield = safe_get(p_info, 'dividendYield', 0) * 100
-                        p_payout = safe_get(p_info, 'payoutRatio', 0) * 100
-                        p_roe = safe_get(p_info, 'returnOnEquity', 0) * 100
-                        p_pm = safe_get(p_info, 'profitMargins', 0) * 100
-                        p_debt_eq = safe_get(p_info, 'debtToEquity', 0)
-                        
                         comp_data.append({
-                            "Ticker": t,
-                            "Price ($)": p_price,
-                            "P/E (Trailing)": p_pe if p_pe else None,
-                            "P/E (Forward)": p_fwd_pe if p_fwd_pe else None,
-                            "Yield (%)": p_div_yield,
-                            "Payout (%)": p_payout,
-                            "ROE (%)": p_roe,
-                            "Net Margin (%)": p_pm,
-                            "Debt/Eq": p_debt_eq
+                            "Ticker": t, "Price ($)": safe_get(p_info, 'currentPrice'), "P/E": safe_get(p_info, 'trailingPE'),
+                            "Yield (%)": safe_get(p_info, 'dividendYield', 0)*100, "Payout (%)": safe_get(p_info, 'payoutRatio', 0)*100,
+                            "ROE (%)": safe_get(p_info, 'returnOnEquity', 0)*100, "Net Mg (%)": safe_get(p_info, 'profitMargins', 0)*100,
+                            "Debt/Eq": safe_get(p_info, 'debtToEquity', 0)
                         })
-                    except:
-                        pass
-                
+                    except: pass
                 if comp_data:
                     df_comp = pd.DataFrame(comp_data).set_index("Ticker")
-                    
-                    # Formatação condicional
-                    st.dataframe(
-                        df_comp.style.format("{:.2f}").highlight_max(subset=["Yield (%)", "ROE (%)", "Net Margin (%)"], color='#d4edda', axis=0)
-                        .highlight_min(subset=["P/E (Trailing)", "P/E (Forward)", "Debt/Eq", "Payout (%)"], color='#d4edda', axis=0),
-                        use_container_width=True
-                    )
-                else:
-                    st.warning("Não foi possível encontrar dados para os tickers informados.")
+                    st.dataframe(df_comp.style.format("{:.2f}").highlight_max(subset=["Yield (%)", "ROE (%)", "Net Mg (%)"], color='#d4edda').highlight_min(subset=["P/E", "Debt/Eq", "Payout (%)"], color='#d4edda'), use_container_width=True)
+                else: st.warning("Sem dados.")
 
         # --- VII. VALUATION LAB ---
-        st.divider()
-        st.markdown("### VII. Laboratório de Valuation")
-        st.caption("Estimativas matemáticas simples baseadas em fórmulas clássicas. Não são recomendações de compra.")
-        
+        st.divider(); st.markdown("### VII. Laboratório de Valuation")
+        st.caption("Estimativas simples. Não são recomendações.")
         v1, v2 = st.columns(2)
-        
-        # 1. Fórmula de Graham (Simplificada)
         with v1:
             st.markdown("##### 🧮 Número de Graham")
             try:
                 eps_ttm = safe_get(info, 'trailingEps')
                 bvps = safe_get(info, 'bookValue')
-                
                 if eps_ttm > 0 and bvps > 0:
-                    graham_number = np.sqrt(22.5 * eps_ttm * bvps)
-                    upside_graham = ((graham_number - price_curr) / price_curr) * 100
-                    
-                    st.metric("Valor Justo (Graham)", f"${round(graham_number, 2)}")
-                    
-                    if upside_graham > 0:
-                        st.success(f"Potencial de Upside: +{round(upside_graham, 1)}% (Subavaliado)")
-                    else:
-                        st.error(f"Sobreavaliado em: {round(upside_graham, 1)}%")
-                    
-                    st.caption(f"*Baseado em EPS (${eps_ttm}) e Valor Patrimonial (${bvps}). Ideal para empresas industriais/financeiras clássicas.*")
-                else:
-                    st.warning("Dados insuficientes (EPS ou Book Value negativos) para cálculo de Graham.")
-            except:
-                st.info("Erro ao calcular Graham Number.")
-
-        # 2. Modelo de Gordon (Dividendos)
+                    gn = np.sqrt(22.5 * eps_ttm * bvps)
+                    ups = ((gn - price_curr) / price_curr) * 100
+                    st.metric("Valor Justo", f"${round(gn, 2)}")
+                    if ups > 0: st.success(f"Upside: +{round(ups, 1)}%")
+                    else: st.error(f"Sobreavaliado: {round(ups, 1)}%")
+                else: st.warning("Dados insuficientes.")
+            except: st.info("Erro Graham.")
         with v2:
-            st.markdown("##### 📈 Modelo de Gordon (Dividendos)")
+            st.markdown("##### 📈 Gordon Growth")
             if has_dividends:
                 try:
-                    # Premissas interativas
-                    risk_free_rate = 0.045 # Treasury 10y aprox
-                    beta_gordon = beta_val if beta_val and beta_val > 0 else 1.0
-                    equity_risk_premium = 0.05
-                    
-                    # Custo de Equity (CAPM)
-                    k = risk_free_rate + (beta_gordon * equity_risk_premium)
-                    
-                    # Taxa de crescimento sustentável (g)
-                    # Limitamos g a 2% a menos que k para o modelo não quebrar
-                    g_sustainable = min(cagr_5/100, k - 0.01) if cagr_5 > 0 else 0.02
-                    
-                    div_rate_g = safe_get(info, 'dividendRate')
-                    
-                    if div_rate_g > 0 and k > g_sustainable:
-                        fair_value_gordon = (div_rate_g * (1 + g_sustainable)) / (k - g_sustainable)
-                        upside_gordon = ((fair_value_gordon - price_curr) / price_curr) * 100
-                        
-                        st.metric("Valor Justo (Gordon)", f"${round(fair_value_gordon, 2)}")
-                        
-                        if upside_gordon > 0:
-                            st.success(f"Potencial de Upside: +{round(upside_gordon, 1)}%")
-                        else:
-                            st.error(f"Sobreavaliado em: {round(upside_gordon, 1)}%")
-                            
-                        st.caption(f"*Premissas: Taxa de Desconto {round(k*100, 1)}%, Crescimento Perpétuo {round(g_sustainable*100, 1)}%.*")
-                    else:
-                        st.warning("Modelo inaplicável (Crescimento muito alto ou sem dividendos).")
-                except:
-                    st.info("Erro no cálculo de Gordon.")
-            else:
-                st.info("Este modelo aplica-se apenas a empresas pagadoras de dividendos.")
+                    k = 0.045 + (beta_val if beta_val else 1.0) * 0.05
+                    g = min(cagr_5/100, k - 0.01) if cagr_5 > 0 else 0.02
+                    dr = safe_get(info, 'dividendRate')
+                    if dr > 0 and k > g:
+                        fv = (dr * (1 + g)) / (k - g)
+                        ups = ((fv - price_curr) / price_curr) * 100
+                        st.metric("Valor Justo", f"${round(fv, 2)}")
+                        if ups > 0: st.success(f"Upside: +{round(ups, 1)}%")
+                        else: st.error(f"Sobreavaliado: {round(ups, 1)}%")
+                    else: st.warning("Modelo inaplicável.")
+                except: st.info("Erro Gordon.")
+            else: st.info("Apenas para pagadoras de dividendos.")
 
-        # --- FOOTER ---
-        st.write("")
-        st.write("")
-        st.markdown("---")
-        st.markdown("""
-        <div style='text-align: center; color: #888; font-size: 0.8rem;'>
-            <b>Paulo Moura Dashboard</b> | Dados fornecidos por Yahoo Finance.<br>
-            Esta ferramenta é para fins educacionais e informativos. Não constitui aconselhamento financeiro.<br>
-            As métricas de 'Moat' e 'Safety' são baseadas em regras heurísticas gerais.
-        </div>
-        """, unsafe_allow_html=True)
+        st.write(""); st.write(""); st.markdown("---")
+        st.markdown("<div style='text-align: center; color: #888; font-size: 0.8rem;'>Paulo Moura Dashboard | Yahoo Finance Data</div>", unsafe_allow_html=True)
