@@ -24,7 +24,6 @@ st.markdown("""
     .news-meta { color: #888; font-size: 0.75rem; margin-bottom: 12px; display: block; border-bottom: 1px solid #eee; padding-bottom: 8px;}
     .fallback-btn { display: inline-block; padding: 10px 20px; background-color: #4169E1; color: white !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
     .welcome-container { text-align: center; margin-top: 50px; color: #666; }
-    
     /* MOAT CARDS */
     .moat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
     .moat-card { flex: 1; min-width: 140px; background-color: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
@@ -172,13 +171,15 @@ def fetch_stock_data(ticker):
     
     for i in range(max_retries):
         try:
+            # 1. Obter Histórico (Essencial)
             history = stock.history(period="10y")
             
             if not history.empty:
+                # 2. Obter Info
                 try: info = stock.info
                 except: info = {}
                 
-                # Fast Info para preço atual
+                # 3. Fast Info
                 fast_info_dict = {}
                 try:
                     fast_info = stock.fast_info
@@ -188,11 +189,13 @@ def fetch_stock_data(ticker):
                     }
                 except: pass
 
+                # 4. Tabelas
                 financials = stock.financials
                 cashflow = stock.cashflow
                 balance = stock.balance_sheet
                 divs = stock.dividends
                 q_cashflow = stock.quarterly_cashflow
+                
                 insider = None
                 try: insider = stock.insider_transactions
                 except: pass
@@ -303,7 +306,7 @@ with st.sidebar:
     if st.button("🔄 Atualizar Dados Agora", help="Limpa a memória e força download."):
         st.cache_data.clear()
         st.rerun()
-    st.info("Atualização automática a cada 60 min para evitar bloqueios.")
+    st.info("Atualização automática a cada 60 min.")
 
 # --- MAIN LOGIC ---
 if not search_input:
@@ -340,6 +343,7 @@ if search_input:
         price_curr = fast_info.get('last_price')
         if not price_curr: price_curr = safe_get(info, 'currentPrice')
         if not price_curr and not hist_price.empty: price_curr = hist_price['Close'].iloc[-1]
+        if price_curr is None: price_curr = 0.0 # Safety net
         
         mkt_cap = fast_info.get('market_cap')
         if not mkt_cap: mkt_cap = safe_get(info, 'marketCap')
@@ -434,13 +438,13 @@ if search_input:
                  if invested_capital > 0: roic_val = (h_ebit.iloc[-1] / invested_capital) * 100
 
         pe_ratio = safe_get(info, 'trailingPE')
-        if not pe_ratio and price_curr: # Tentar calcular se faltar
+        if not pe_ratio and price_curr: 
              eps_ttm = safe_get(info, 'trailingEps')
              if eps_ttm and eps_ttm > 0: pe_ratio = price_curr / eps_ttm
 
         beta_val = safe_get(info, 'beta')
 
-        # --- MOAT CALCULATION (CORRIGIDO PARA REITS) ---
+        # --- MOAT CALCULATION ---
         moat_score = 0
         moat_data = [] 
         
@@ -465,7 +469,6 @@ if search_input:
             elif nd_ebitda_val < 6.5: moat_data.append(("Safety", f"NetDebt {round(nd_ebitda_val,1)}x", "moat-avg"))
             else: moat_data.append(("Safety", "High Leverage", "moat-bad"))
             
-            # Placeholder for 4th card
             moat_data.append(("Type", "REIT", "moat-avg"))
 
         else:
@@ -535,7 +538,7 @@ if search_input:
                 insider_delta_display = f"{buy_count} Buys vs {sell_count} Sells"
         except: pass
 
-        # --- DIVIDENDS & PAYOUT (CORRIGIDO PARA REITS) ---
+        # --- DIVIDENDS & PAYOUT ---
         cagr_3, cagr_5 = 0, 0
         annual_divs = pd.Series()
         series_divs_history = None
@@ -549,10 +552,8 @@ if search_input:
             if len(clean_divs) >= 4: cagr_3 = calculate_cagr(clean_divs.iloc[-4], clean_divs.iloc[-1], 3) * 100
             if len(clean_divs) >= 6: cagr_5 = calculate_cagr(clean_divs.iloc[-6], clean_divs.iloc[-1], 5) * 100
             
-            # PAYOUT CALCULATION
+            # SUPER ROBUST PAYOUT
             try:
-                # Para REITs, usamos OCF como denominador (ignorando capex de crescimento)
-                # Para outros, usamos FCF (OCF - Capex)
                 if q_cashflow is not None and not q_cashflow.empty:
                     line_ocf = find_line(q_cashflow, ['operating cash flow', 'total cash from operating activities'])
                     line_capex = find_line(q_cashflow, ['capital expenditure', 'purchase of ppe'])
@@ -561,10 +562,8 @@ if search_input:
                         ttm_ocf = line_ocf.iloc[:4].sum()
                         
                         if is_reit:
-                            # REIT Fix: Denominador é apenas OCF (proxy de FFO)
                             manual_cash_metric = ttm_ocf
                         else:
-                            # Standard Fix: Denominador é FCF (OCF + Capex)
                             ttm_capex = 0
                             if line_capex is not None: ttm_capex = line_capex.iloc[:4].sum() 
                             manual_cash_metric = ttm_ocf + ttm_capex
@@ -577,11 +576,9 @@ if search_input:
                             fcf_payout_ratio = (total_div_est / manual_cash_metric) * 100
             except: pass
 
-            # Fallback (Info)
             if fcf_payout_ratio is None:
                 try:
                     ttm_fcf = safe_get(info, 'freeCashFlow')
-                    # Se for REIT e o FCF vier negativo/baixo do Yahoo, tentamos usar OCF do info
                     if is_reit:
                         ttm_ocf = safe_get(info, 'operatingCashflow')
                         if ttm_ocf: ttm_fcf = ttm_ocf
@@ -615,10 +612,18 @@ if search_input:
         m1, m2, m3 = st.columns(3)
         m1.metric("Price", f"${round(price_curr, 2)}")
         
-        final_payout_val = 0
+        # DEFINE VARIABLES SAFE
+        div_yield_val = 0.0
+        final_payout_val = 0.0
+        
         if has_dividends:
+            div_rate_val = safe_get(info, 'dividendRate')
+            if price_curr > 0:
+                div_yield_val = (div_rate_val / price_curr * 100)
+            
             final_payout_label = "Payout (FCF-TTM)"
             final_payout_help = "Dividends / Free Cash Flow. For REITs: Dividends / Operating Cash Flow."
+            
             if fcf_payout_ratio is not None and 0 < fcf_payout_ratio < 500:
                 final_payout_val = fcf_payout_ratio
                 if is_reit: final_payout_label = "Payout (Est. FFO)"
@@ -626,6 +631,7 @@ if search_input:
                 final_payout_val = safe_get(info, 'payoutRatio') * 100
                 final_payout_label = "Payout (GAAP)"
                 final_payout_help = "Earnings payout (Less reliable)."
+            
             p_txt, p_col = get_metric_status(final_payout_val, is_reit, 'payout')
             m2.metric("Yield", f"{round(div_yield_val, 2)}%")
             m3.metric(final_payout_label, f"{round(final_payout_val, 1)}%", p_txt, delta_color=p_col, help=final_payout_help)
@@ -668,7 +674,6 @@ if search_input:
             else: st.info("N/A")
         with c3: 
             st.markdown("##### Total FCF/OCF ($)", help="Total Cash Flow.")
-            # Se for REIT, mostra OCF em vez de FCF para nao ser negativo
             data_to_show = h_ocf if is_reit else h_fcf
             if data_to_show is not None: st.altair_chart(create_altair_chart(data_to_show, "#708090", '$.2s'), use_container_width=True)
             else: st.info("N/A")
@@ -799,7 +804,6 @@ if search_input:
         df_div_safety = pd.DataFrame()
         df_debt_safety = pd.DataFrame()
         
-        # Correção visual: Se for REIT, usar OCF para os graficos tambem
         h_cash_metric_chart = h_ocf if is_reit else h_fcf
         
         if h_divs_paid is not None and h_cash_metric_chart is not None:
