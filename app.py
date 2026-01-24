@@ -37,14 +37,17 @@ st.markdown("""
 
 # --- HELPER FUNCTIONS ---
 def safe_get(data_dict, key, default=0):
+    if not isinstance(data_dict, dict): return default
     val = data_dict.get(key)
     return val if val is not None else default
 
 def find_line(df, terms):
     try:
         if df is None or df.empty: return None
+        # Normalizar índice para string minúscula
+        df.index = df.index.map(str).str.lower()
         for idx in df.index:
-            if any(t in str(idx).lower() for t in terms):
+            if any(t in idx for t in terms):
                 return df.loc[idx].sort_index()
     except: pass
     return None
@@ -160,7 +163,7 @@ def get_google_news(ticker):
     except: return []
     return []
 
-# --- ROBUST DATA FETCHING (FIXED SERIALIZATION) ---
+# --- ROBUST DATA FETCHING ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_stock_data(ticker):
     max_retries = 3
@@ -168,28 +171,41 @@ def fetch_stock_data(ticker):
     
     for i in range(max_retries):
         try:
-            history = stock.history(period="5d")
+            # 1. Obter Histórico (Essencial)
+            history = stock.history(period="10y")
             
             if not history.empty:
+                # 2. Obter Info (Pode falhar, usamos dict vazio se falhar)
                 try: info = stock.info
                 except: info = {}
                 
-                # Fetch all dataframes
+                # 3. Obter Fast Info (Mais fiável para Preço e MarketCap)
+                # Convertemos para dict normal para ser compatível com cache
+                fast_info_dict = {}
+                try:
+                    fast_info = stock.fast_info
+                    fast_info_dict = {
+                        'last_price': fast_info.last_price,
+                        'market_cap': fast_info.market_cap,
+                        'previous_close': fast_info.previous_close
+                    }
+                except: pass
+
+                # 4. Obter Tabelas Financeiras
                 financials = stock.financials
                 cashflow = stock.cashflow
                 balance = stock.balance_sheet
                 divs = stock.dividends
                 q_cashflow = stock.quarterly_cashflow
-                long_history = stock.history(period="10y")
                 
                 insider = None
                 try: insider = stock.insider_transactions
                 except: pass
 
-                # IMPORTANT: Do NOT return 'stock' object here. Only dataframes/dicts.
                 return {
                     "info": info,
-                    "history": long_history,
+                    "fast_info": fast_info_dict, # Novo campo
+                    "history": history,
                     "financials": financials,
                     "cashflow": cashflow,
                     "balance": balance,
@@ -198,7 +214,7 @@ def fetch_stock_data(ticker):
                     "insider": insider
                 }
         except Exception:
-            time.sleep((i + 1) * 2)
+            time.sleep(1)
             
     return None
 
@@ -311,11 +327,12 @@ if search_input:
         data_bundle = fetch_stock_data(ticker)
     
     if data_bundle is None:
-        st.error(f"Erro ao obter dados para '{ticker}'. O Yahoo pode estar a bloquear o acesso temporariamente. Aguarda 1 minuto e tenta 'Atualizar Dados'.")
+        st.error(f"Erro ao obter dados para '{ticker}'. O Yahoo pode estar a bloquear o acesso. Tenta outra empresa ou aguarda 1 min.")
         st.stop()
 
     # Unpack Data
     info = data_bundle['info']
+    fast_info = data_bundle.get('fast_info', {}) # Unpack fast info
     financials = data_bundle['financials']
     cashflow = data_bundle['cashflow']
     balance = data_bundle['balance']
@@ -326,13 +343,34 @@ if search_input:
 
     with st.spinner('Calculating Metrics...'):
         
-        # 2. Process Data
+        # --- CRITICAL FIX FOR ZEROS: PRICE & MARKET CAP LOGIC ---
+        # 1. Try Fast Info (Most reliable)
+        price_curr = fast_info.get('last_price')
+        mkt_cap = fast_info.get('market_cap')
+        
+        # 2. Try Info (Fallback)
+        if not price_curr: price_curr = safe_get(info, 'currentPrice')
+        if not mkt_cap: mkt_cap = safe_get(info, 'marketCap')
+        
+        # 3. Try History (Last Resort for Price)
+        if not price_curr and not hist_price.empty:
+            price_curr = hist_price['Close'].iloc[-1]
+
+        # 4. Try Info for specific missing ratios (manual calc if needed)
+        pe_ratio = safe_get(info, 'trailingPE')
+        # If P/E is 0/None, try calculating: Price / Trailing EPS
+        if not pe_ratio and price_curr:
+            eps_ttm = safe_get(info, 'trailingEps')
+            if eps_ttm and eps_ttm > 0:
+                pe_ratio = price_curr / eps_ttm
+
+        # --- DATA PROCESSING ---
         h_net_income = find_line(cashflow, ['net income'])
         if h_net_income is None: h_net_income = find_line(financials, ['net income'])
         h_depr = find_line(cashflow, ['depreciation'])
         if h_depr is None: h_depr = find_line(financials, ['depreciation'])
         h_capex = find_line(cashflow, ['capital expenditure', 'purchase of ppe', 'property'])
-        h_shares = find_line(balance, ['share issued'])
+        h_shares = find_line(balance, ['share issued', 'ordinary shares number']) # Added alternative terms
         if h_shares is None: h_shares = find_line(financials, ['basic average shares'])
         h_ocf = find_line(cashflow, ['operating cash flow', 'total cash from operating activities'])
 
@@ -355,12 +393,10 @@ if search_input:
             for col in ['NI', 'DEPR', 'CAPEX', 'OCF']: 
                 if col not in df_calc.columns: df_calc[col] = 0
             
-            # --- UNIVERSAL CASH METRIC (FCF or AFFO) ---
+            # Cash Metric Logic
             if is_reit:
-                if df_calc['OCF'].sum() != 0:
-                    df_calc['Cash_Metric'] = df_calc['OCF']
-                else:
-                    df_calc['Cash_Metric'] = df_calc['NI'].fillna(0) + df_calc['DEPR'].fillna(0)
+                if df_calc['OCF'].sum() != 0: df_calc['Cash_Metric'] = df_calc['OCF']
+                else: df_calc['Cash_Metric'] = df_calc['NI'].fillna(0) + df_calc['DEPR'].fillna(0)
             else:
                 df_calc['Cash_Metric'] = df_calc['OCF'].fillna(0) + df_calc['CAPEX'].fillna(0)
 
@@ -415,63 +451,47 @@ if search_input:
                  invested_capital = last_equity + hist_debt.iloc[-1] - (h_cash.iloc[-1] if h_cash is not None else 0)
                  if invested_capital > 0: roic_val = (h_ebit.iloc[-1] / invested_capital) * 100
 
-        pe_ratio = safe_get(info, 'trailingPE')
         beta_val = safe_get(info, 'beta')
 
         # --- MOAT CALCULATION ---
         moat_score = 0
-        moat_data = [] # (Name, Value, Class)
+        moat_data = [] 
         
-        # 1. Efficiency
         if roic_val > 15: 
             moat_score += 1
             moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-good"))
-        elif roic_val > 8:
-            moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-avg"))
-        else:
-            moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-bad"))
+        elif roic_val > 8: moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-avg"))
+        else: moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-bad"))
             
-        # 2. Pricing Power
         gm_val_last = series_gross_margin.iloc[-1] if series_gross_margin is not None else 0
         if gm_val_last > 40: 
             moat_score += 1
             moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-good"))
-        elif gm_val_last > 20:
-            moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-avg"))
-        else:
-            moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-bad"))
+        elif gm_val_last > 20: moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-avg"))
+        else: moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-bad"))
             
-        # 3. Profitability
         pm_val_calc = safe_get(info, 'profitMargins') * 100
         if pm_val_calc > 15: 
             moat_score += 1
             moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-good"))
-        elif pm_val_calc > 5:
-            moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-avg"))
-        else:
-            moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-bad"))
+        elif pm_val_calc > 5: moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-avg"))
+        else: moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-bad"))
         
-        # 4. Scale
-        mkt_cap = safe_get(info, 'marketCap')
-        if mkt_cap > 100_000_000_000: 
+        if mkt_cap and mkt_cap > 100_000_000_000: 
             moat_score += 1
             moat_data.append(("Scale", "Mega Cap", "moat-good"))
-        elif mkt_cap > 10_000_000_000:
-            moat_data.append(("Scale", "Large Cap", "moat-avg"))
-        else:
-            moat_data.append(("Scale", "Mid/Small", "moat-avg"))
+        elif mkt_cap and mkt_cap > 10_000_000_000: moat_data.append(("Scale", "Large Cap", "moat-avg"))
+        else: moat_data.append(("Scale", "Mid/Small", "moat-avg"))
 
         # --- INSIDER ---
         insider_label = "Neutral"
         insider_val_str = "N/A"
         insider_delta_display = "No recent data"
-        
         net_val_insider = 0
         try:
             if insider_tx is not None and not insider_tx.empty:
                 recent = insider_tx.head(20) 
-                buy_count = 0
-                sell_count = 0
+                buy_count, sell_count = 0, 0
                 if 'Value' in recent.columns and 'Shares' in recent.columns:
                     for index, row in recent.iterrows():
                         val = row['Value']
@@ -502,7 +522,7 @@ if search_input:
                 insider_delta_display = f"{buy_count} Buys vs {sell_count} Sells"
         except: pass
 
-        # --- DIVIDENDS & PAYOUT ---
+        # --- DIVIDENDS ---
         cagr_3, cagr_5 = 0, 0
         annual_divs = pd.Series()
         series_divs_history = None
@@ -510,25 +530,20 @@ if search_input:
         if has_dividends and not divs.empty:
             annual_divs = divs.resample('YE').sum()
             series_divs_history = annual_divs
-            
             clean_divs = annual_divs.copy()
             if len(clean_divs) > 2:
                 if clean_divs.iloc[-1] < (clean_divs.iloc[-2] * 0.7): clean_divs = clean_divs[:-1]
-            
             if len(clean_divs) >= 4: cagr_3 = calculate_cagr(clean_divs.iloc[-4], clean_divs.iloc[-1], 3) * 100
             if len(clean_divs) >= 6: cagr_5 = calculate_cagr(clean_divs.iloc[-6], clean_divs.iloc[-1], 5) * 100
             
-            # --- SUPER ROBUST PAYOUT CALCULATION (MANUAL CONSTRUCTION) ---
             try:
                 if q_cashflow is not None and not q_cashflow.empty:
                     line_ocf = find_line(q_cashflow, ['operating cash flow', 'total cash from operating activities'])
                     line_capex = find_line(q_cashflow, ['capital expenditure', 'purchase of ppe'])
-                    
                     if line_ocf is not None:
                         ttm_ocf = line_ocf.iloc[:4].sum()
                         ttm_capex = 0
-                        if line_capex is not None:
-                            ttm_capex = line_capex.iloc[:4].sum() 
+                        if line_capex is not None: ttm_capex = line_capex.iloc[:4].sum() 
                         manual_ttm_fcf = ttm_ocf + ttm_capex
                         div_rate = safe_get(info, 'dividendRate')
                         shares = safe_get(info, 'sharesOutstanding')
@@ -537,7 +552,6 @@ if search_input:
                             fcf_payout_ratio = (total_div_est / manual_ttm_fcf) * 100
             except: pass
 
-            # Fallback 2: Info TTM
             if fcf_payout_ratio is None:
                 try:
                     ttm_fcf = safe_get(info, 'freeCashFlow')
@@ -559,7 +573,7 @@ if search_input:
 
         news_items = get_google_news(ticker)
 
-        # --- DASHBOARD LAYOUT ---
+        # --- DASHBOARD DISPLAY ---
         st.header(f"{info.get('longName', ticker)}")
         st.caption(f"Symbol: {ticker} | Sector: {info.get('sector', 'N/A')} | Industry: {info.get('industry', 'N/A')}")
         with st.expander("Business Description", expanded=False):
@@ -567,12 +581,11 @@ if search_input:
         st.divider()
 
         # METRICS ROW
-        price_curr = safe_get(info, 'currentPrice')
         div_rate_val = safe_get(info, 'dividendRate')
         div_yield_val = (div_rate_val / price_curr * 100) if (price_curr and price_curr > 0) else 0
         
         m1, m2, m3 = st.columns(3)
-        m1.metric("Price", f"${price_curr}")
+        m1.metric("Price", f"${round(price_curr, 2)}")
         
         final_payout_val = 0
         if has_dividends:
@@ -589,7 +602,6 @@ if search_input:
             m2.metric("Yield", f"{round(div_yield_val, 2)}%")
             m3.metric(final_payout_label, f"{round(final_payout_val, 1)}%", p_txt, delta_color=p_col, help=final_payout_help)
         else:
-            mkt_cap = safe_get(info, 'marketCap')
             m2.metric("Market Cap", format_large_number(mkt_cap))
             pm_val = safe_get(info, 'profitMargins') * 100
             pm_txt, pm_col = get_metric_status(pm_val, is_reit, 'profit_margin')
@@ -847,8 +859,12 @@ if search_input:
                     try:
                         p_stock = yf.Ticker(t)
                         p_info = p_stock.info
+                        # Try fast info for competitors too
+                        p_price = p_stock.fast_info.last_price
+                        if not p_price: p_price = safe_get(p_info, 'currentPrice')
+                        
                         comp_data.append({
-                            "Ticker": t, "Price ($)": safe_get(p_info, 'currentPrice'), "P/E": safe_get(p_info, 'trailingPE'),
+                            "Ticker": t, "Price ($)": p_price, "P/E": safe_get(p_info, 'trailingPE'),
                             "Yield (%)": safe_get(p_info, 'dividendYield', 0)*100, "Payout (%)": safe_get(p_info, 'payoutRatio', 0)*100,
                             "ROE (%)": safe_get(p_info, 'returnOnEquity', 0)*100, "Net Mg (%)": safe_get(p_info, 'profitMargins', 0)*100,
                             "Debt/Eq": safe_get(p_info, 'debtToEquity', 0)
