@@ -8,32 +8,205 @@ import xml.etree.ElementTree as ET
 import time
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Paulo Moura Dashboard", layout="wide")
+st.set_page_config(page_title="Paulo Moura Dashboard", layout="wide", initial_sidebar_state="expanded")
+
+# --- TRANSLATION SYSTEM ---
+# Dicionário de traduções (PT / EN)
+LANG = {
+    "pt": {
+        "sidebar_settings": "Definições",
+        "sidebar_lang": "Idioma / Language",
+        "search_label": "Pesquisar Empresa",
+        "search_placeholder": "Ex: AAPL, KO, Realty Income...",
+        "btn_search": "🔍 Analisar",
+        "welcome_title": "Investimento Inteligente Simplificado",
+        "welcome_subtitle": "Análise fundamentalista de ações e REITs em segundos.",
+        "how_it_works": "Como funciona:",
+        "step_1": "1. Escreva o **Ticker** (ex: O, AAPL) ou o nome da empresa.",
+        "step_2": "2. Veja métricas de **Segurança**, **Dividendos** e **Vantagem Competitiva**.",
+        "step_3": "3. Tome decisões baseadas em dados, não em palpites.",
+        "try_examples": "Ou experimente um destes exemplos:",
+        "loading": "A analisar",
+        "conn_error": "Erro de conexão ou limite de pedidos.",
+        "not_found": "Empresa não encontrada.",
+        "price": "Preço",
+        "market_cap": "Valor de Mercado",
+        "yield": "Dividend Yield",
+        "profit_margin": "Margem Líquida",
+        "perf_title": "I. Performance Financeira",
+        "affo_trend": "Tendência AFFO/Share ($)",
+        "eps_trend": "Tendência EPS ($)",
+        "cash_metric": "Fluxo de Caixa Operacional / FCF",
+        "total_cash": "Cash Flow Total ($)",
+        "struct_title": "II. Estrutura & Segurança",
+        "shares": "Ações em Circulação (Diluição)",
+        "debt": "Dívida Total ($)",
+        "safety_score": "Scorecard de Segurança",
+        "net_debt": "Dívida Líq./EBITDA",
+        "int_cov": "Cob. de Juros",
+        "insider": "Transações de Insiders (6M)",
+        "beta": "Beta (Volatilidade)",
+        "val_title": "III. Avaliação & Qualidade",
+        "yield_hist": "Histórico de Yield (%)",
+        "rev_hist": "Histórico de Receita ($)",
+        "gm_trend": "Margem Bruta (%)",
+        "div_hist": "Histórico de Dividendos ($)",
+        "ni_hist": "Histórico de Lucro Líquido ($)",
+        "val_score": "Scorecard de Avaliação",
+        "div_cagr": "Cresc. Div (5A)",
+        "chowder": "Regra de Chowder",
+        "rev_growth": "Cresc. Receita",
+        "eps_growth": "Cresc. EPS",
+        "moat_title": "🏰 Vantagem Competitiva (Moat)",
+        "safety_title": "IV. Análise de Solvência",
+        "div_safety": "Segurança do Dividendo",
+        "solvency": "Solvência (Cash vs Dívida)",
+        "analyst_title": "V. Estimativas & Notícias",
+        "consensus": "Consenso Wall St.",
+        "target": "Preço Alvo Médio",
+        "news": "Últimas Notícias",
+        "auto_summary": "🤖 Análise Automática",
+        "bull": "Pontos Fortes (Bull)",
+        "bear": "Pontos Fracos (Bear)",
+        "comp_title": "VI. Comparação com Competidores",
+        "comp_input": "Adicionar concorrentes (sep. por vírgula):",
+        "comp_placeholder": "Ex: KO, PEP, MNST",
+        "footer": "Dados fornecidos por Yahoo Finance | Ferramenta Educacional"
+    },
+    "en": {
+        "sidebar_settings": "Settings",
+        "sidebar_lang": "Language",
+        "search_label": "Search Ticker",
+        "search_placeholder": "e.g. AAPL, KO, Realty Income...",
+        "btn_search": "🔍 Analyze",
+        "welcome_title": "Smart Investing Simplified",
+        "welcome_subtitle": "Fundamental analysis for Stocks and REITs in seconds.",
+        "how_it_works": "How it works:",
+        "step_1": "1. Enter a **Ticker** (e.g., O, AAPL) or company name.",
+        "step_2": "2. View **Safety**, **Dividend** and **Moat** metrics.",
+        "step_3": "3. Make data-driven decisions.",
+        "try_examples": "Or try one of these examples:",
+        "loading": "Analyzing",
+        "conn_error": "Connection error or rate limit.",
+        "not_found": "Company not found.",
+        "price": "Price",
+        "market_cap": "Market Cap",
+        "yield": "Dividend Yield",
+        "profit_margin": "Net Margin",
+        "perf_title": "I. Financial Performance",
+        "affo_trend": "AFFO/Share Trend ($)",
+        "eps_trend": "EPS Trend ($)",
+        "cash_metric": "Operating Cash Flow / FCF",
+        "total_cash": "Total Cash Flow ($)",
+        "struct_title": "II. Structure & Safety",
+        "shares": "Shares Outstanding",
+        "debt": "Total Debt ($)",
+        "safety_score": "Safety Scorecard",
+        "net_debt": "Net Debt/EBITDA",
+        "int_cov": "Interest Cov.",
+        "insider": "Insider Trading (6M)",
+        "beta": "Beta (Volatility)",
+        "val_title": "III. Valuation & Quality",
+        "yield_hist": "Yield History (%)",
+        "rev_hist": "Revenue History ($)",
+        "gm_trend": "Gross Margin (%)",
+        "div_hist": "Dividend History ($)",
+        "ni_hist": "Net Income History ($)",
+        "val_score": "Valuation Scorecard",
+        "div_cagr": "Div Growth (5Y)",
+        "chowder": "Chowder Rule",
+        "rev_growth": "Rev Growth",
+        "eps_growth": "EPS Growth",
+        "moat_title": "🏰 Competitive Advantage (Moat)",
+        "safety_title": "IV. Solvency Analysis",
+        "div_safety": "Dividend Safety",
+        "solvency": "Solvency (Cash vs Debt)",
+        "analyst_title": "V. Estimates & News",
+        "consensus": "Wall St. Consensus",
+        "target": "Avg Price Target",
+        "news": "Latest Headlines",
+        "auto_summary": "🤖 Automated Analysis",
+        "bull": "The Bull Case",
+        "bear": "The Bear Case",
+        "comp_title": "VI. Competitor Comparison",
+        "comp_input": "Add competitors (comma sep):",
+        "comp_placeholder": "e.g. KO, PEP, MNST",
+        "footer": "Data provided by Yahoo Finance | Educational Tool"
+    }
+}
 
 # --- CUSTOM CSS ---
 st.markdown("""
     <style>
-    .stTextInput > div > div > input { color: #333; }
-    h3 { margin-top: 2rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.5rem; font-family: 'Arial', sans-serif; color: #333; }
-    h5 { color: #666; font-weight: 500; font-size: 0.9rem; margin-bottom: 0.5rem; }
-    .stProgress > div > div > div > div { background-color: #87CEFA; }
-    div.stButton > button { background-color: #f0f2f6; color: #31333F; border: 1px solid #d6d6d6; }
-    div.stButton > button:hover { border-color: #31333F; color: #31333F; }
-    a.news-link { text-decoration: none; color: #1f77b4; font-weight: 600; font-size: 0.90rem; display: block; margin-bottom: 2px;}
-    a.news-link:hover { text-decoration: underline; color: #004085; }
-    .news-meta { color: #888; font-size: 0.75rem; margin-bottom: 12px; display: block; border-bottom: 1px solid #eee; padding-bottom: 8px;}
-    .fallback-btn { display: inline-block; padding: 10px 20px; background-color: #4169E1; color: white !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
-    .welcome-container { text-align: center; margin-top: 50px; color: #666; }
-    /* MOAT CARDS */
+    /* Clean Look */
+    .stApp { background-color: #ffffff; }
+    h1, h2, h3 { font-family: 'Helvetica Neue', sans-serif; color: #111; }
+    
+    /* Metrics Styling */
+    div[data-testid="stMetricValue"] { font-size: 1.6rem !important; font-weight: 700; color: #333; }
+    div[data-testid="stMetricLabel"] { font-size: 0.9rem !important; color: #666; }
+    
+    /* Buttons */
+    div.stButton > button {
+        background-color: #f8f9fa;
+        color: #333;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        transition: all 0.2s;
+    }
+    div.stButton > button:hover {
+        border-color: #4169E1;
+        color: #4169E1;
+        background-color: #fff;
+    }
+    
+    /* Example Buttons on Landing Page */
+    .example-btn-container { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+    
+    /* Cards for Moat */
     .moat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-    .moat-card { flex: 1; min-width: 140px; background-color: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .moat-card { flex: 1; min-width: 140px; background-color: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #eee; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
     .moat-label { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
     .moat-value { font-size: 1.1rem; font-weight: 700; color: #333; }
     .moat-good { border-top: 4px solid #28a745; }
     .moat-avg { border-top: 4px solid #ffc107; }
     .moat-bad { border-top: 4px solid #dc3545; }
+    
+    /* News */
+    a.news-link { text-decoration: none; color: #0066cc; font-weight: 600; display: block; margin-bottom: 4px; }
+    a.news-link:hover { text-decoration: underline; }
+    .news-meta { color: #999; font-size: 0.75rem; margin-bottom: 12px; display: block; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; }
+    
+    /* Welcome Container */
+    .welcome-box {
+        text-align: center;
+        padding: 40px 20px;
+        background: linear-gradient(to bottom, #ffffff, #f8f9fa);
+        border-radius: 12px;
+        margin-top: 20px;
+        border: 1px solid #eee;
+    }
+    .welcome-title { font-size: 2.5rem; font-weight: 800; color: #111; margin-bottom: 10px; }
+    .welcome-sub { font-size: 1.2rem; color: #666; margin-bottom: 30px; }
+    .step-box { text-align: left; max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; border: 1px solid #eee; }
     </style>
 """, unsafe_allow_html=True)
+
+# --- SIDEBAR (SETTINGS) ---
+with st.sidebar:
+    st.header("⚙️ " + "Opções" if "pt" else "Settings")
+    
+    # Language Selector
+    lang_choice = st.selectbox(
+        "Idioma / Language", 
+        ["🇵🇹 Português", "🇺🇸 English"], 
+        index=0
+    )
+    
+    # Set Language Key
+    lg = "pt" if "Português" in lang_choice else "en"
+    T = LANG[lg] # Get translation dictionary
 
 # --- HELPER FUNCTIONS ---
 def safe_get(data_dict, key, default=0):
@@ -82,7 +255,6 @@ def get_metric_status(value, is_reit, metric_type):
     if value is None: return None, "off"
     
     if metric_type == 'payout':
-        # Para REITs, até 90% do AFFO/OCF é aceitável
         limit_good = 90 if is_reit else 75 
         limit_bad = 100 if is_reit else 90
         if value < limit_good: return "Safe", "normal"
@@ -147,7 +319,7 @@ def search_symbol(query):
 
 def get_google_news(ticker):
     try:
-        url = f"https://news.google.com/rss/search?q={ticker}+stock+finance&hl=en-US&gl=US&ceid=US:en"
+        url = f"https://news.google.com/rss/search?q={ticker}+stock+finance&hl={lg}&gl=US&ceid=US:{lg}"
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=4) 
         if response.status_code == 200:
@@ -172,7 +344,6 @@ def fetch_stock_data(ticker):
     for i in range(max_retries):
         try:
             history = stock.history(period="10y")
-            
             if not history.empty:
                 try: info = stock.info
                 except: info = {}
@@ -180,34 +351,21 @@ def fetch_stock_data(ticker):
                 fast_info_dict = {}
                 try:
                     fast_info = stock.fast_info
-                    fast_info_dict = {
-                        'last_price': fast_info.last_price,
-                        'market_cap': fast_info.market_cap
-                    }
-                except: pass
-
-                financials = stock.financials
-                cashflow = stock.cashflow
-                balance = stock.balance_sheet
-                divs = stock.dividends
-                q_cashflow = stock.quarterly_cashflow
-                insider = None
-                try: insider = stock.insider_transactions
+                    fast_info_dict = {'last_price': fast_info.last_price, 'market_cap': fast_info.market_cap}
                 except: pass
 
                 return {
                     "info": info,
                     "fast_info": fast_info_dict,
                     "history": history,
-                    "financials": financials,
-                    "cashflow": cashflow,
-                    "balance": balance,
-                    "dividends": divs,
-                    "q_cashflow": q_cashflow,
-                    "insider": insider
+                    "financials": stock.financials,
+                    "cashflow": stock.cashflow,
+                    "balance": stock.balance_sheet,
+                    "dividends": stock.dividends,
+                    "q_cashflow": stock.quarterly_cashflow,
+                    "insider": stock.insider_transactions if hasattr(stock, 'insider_transactions') else None
                 }
-        except Exception:
-            time.sleep(1)
+        except Exception: time.sleep(1)
     return None
 
 # --- CHARTING ---
@@ -287,39 +445,60 @@ def create_grouped_bar_chart(df_aligned, colors=None):
 
 # --- UI INPUT ---
 st.title("📊 Paulo Moura Dashboard")
+
+# Session state for search
+if 'search_query' not in st.session_state:
+    st.session_state.search_query = ''
+
+def run_search(t):
+    st.session_state.search_query = t
+
 col_input, col_btn = st.columns([4, 1]) 
 with col_input:
-    search_input = st.text_input("Ticker or Company Name", value="").strip()
+    search_input = st.text_input(T['search_label'], value=st.session_state.search_query, placeholder=T['search_placeholder']).strip()
 with col_btn:
     st.write("") 
     st.write("") 
-    search = st.button("🔍 Search") 
+    search_btn = st.button(T['btn_search']) 
 
-# --- SIDEBAR ---
-with st.sidebar:
-    st.header("⚙️ Opções")
-    if st.button("🔄 Atualizar Dados Agora", help="Limpa a memória e força download."):
-        st.cache_data.clear()
-        st.rerun()
-    st.info("Atualização automática a cada 60 min.")
-
-# --- MAIN LOGIC ---
+# --- LANDING PAGE (IF NO SEARCH) ---
 if not search_input:
-    st.markdown("<div class='welcome-container'><h3>👋 Welcome!</h3><p>Enter a stock ticker (e.g., <b>O</b>, <b>AAPL</b>).</p></div>", unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class='welcome-box'>
+        <div class='welcome-title'>{T['welcome_title']}</div>
+        <div class='welcome-sub'>{T['welcome_subtitle']}</div>
+        
+        <div class='step-box'>
+            <p><strong>{T['how_it_works']}</strong></p>
+            <p>{T['step_1']}</p>
+            <p>{T['step_2']}</p>
+            <p>{T['step_3']}</p>
+        </div>
+    </div>
+    <br>
+    <p style='text-align: center; color: #666;'>{T['try_examples']}</p>
+    """, unsafe_allow_html=True)
+    
+    # Example Buttons
+    c_ex1, c_ex2, c_ex3 = st.columns(3)
+    if c_ex1.button("🍎 Apple (AAPL)", use_container_width=True): run_search("AAPL"); st.rerun()
+    if c_ex2.button("🏘 Realty Income (O)", use_container_width=True): run_search("O"); st.rerun()
+    if c_ex3.button("🥤 Coca-Cola (KO)", use_container_width=True): run_search("KO"); st.rerun()
 
+# --- MAIN ANALYSIS LOGIC ---
 if search_input:
     ticker = search_input.upper()
     if " " in ticker or len(ticker) > 5:
-        with st.spinner(f"Searching for '{search_input}'..."):
+        with st.spinner(f"{T['loading']}..."):
             found_ticker = search_symbol(search_input)
             if found_ticker: ticker = found_ticker
 
     # 1. Fetch Data
-    with st.spinner(f"Connecting to Yahoo Finance for {ticker}..."):
+    with st.spinner(f"{T['loading']} {ticker}..."):
         data_bundle = fetch_stock_data(ticker)
     
     if data_bundle is None:
-        st.error(f"Erro ao obter dados para '{ticker}'. O Yahoo pode estar a bloquear o acesso. Tenta outra empresa ou aguarda 1 min.")
+        st.error(T['conn_error'])
         st.stop()
 
     info = data_bundle['info']
@@ -332,7 +511,7 @@ if search_input:
     q_cashflow = data_bundle['q_cashflow']
     insider_tx = data_bundle['insider']
 
-    with st.spinner('Calculating Metrics...'):
+    with st.spinner(T['loading'] + '...'):
         
         # --- PREÇO E MARKET CAP ROBUSTO ---
         price_curr = fast_info.get('last_price')
@@ -359,8 +538,8 @@ if search_input:
         
         # REIT & DIVIDEND Detection
         is_reit = False
-        sector = info.get('sector', '').lower()
-        industry = info.get('industry', '').lower()
+        sector = str(info.get('sector', '')).lower()
+        industry = str(info.get('industry', '')).lower()
         if 'reit' in sector or 'reit' in industry or 'real estate' in sector: is_reit = True
         
         has_dividends = False
@@ -612,9 +791,8 @@ if search_input:
 
         # METRICS ROW
         m1, m2, m3 = st.columns(3)
-        m1.metric("Price", f"${round(price_curr, 2)}")
+        m1.metric(T['price'], f"${round(price_curr, 2)}")
         
-        # DEFINE VARIABLES SAFE
         div_yield_val = 0.0
         final_payout_val = 0.0
         
@@ -624,34 +802,26 @@ if search_input:
                 div_yield_val = (div_rate_val / price_curr * 100)
             
             final_payout_label = "Payout (FCF-TTM)"
-            final_payout_help = "Dividends / Free Cash Flow. For REITs: Dividends / Operating Cash Flow."
             
-            # LÓGICA DE DECISÃO FINAL DO PAYOUT
             if fcf_payout_ratio is not None and 0 < fcf_payout_ratio < 500:
                 final_payout_val = fcf_payout_ratio
                 if is_reit: final_payout_label = "Payout (Est. OCF/FFO)"
             else:
-                # Se falhou o calculo manual:
                 if not is_reit:
-                    # Se NÃO for REIT, usamos o GAAP do Yahoo
                     final_payout_val = safe_get(info, 'payoutRatio') * 100
                     final_payout_label = "Payout (GAAP)"
-                    final_payout_help = "Earnings payout (Less reliable)."
                 else:
-                    # Se FOR REIT e falhou o cálculo manual, NÃO usamos o GAAP (114%)
-                    # Deixamos a zero ou mostramos aviso
                     final_payout_val = 0
                     final_payout_label = "Payout (Data N/A)"
-                    final_payout_help = "Could not calculate FFO Payout. GAAP Payout ignored for REITs."
 
             p_txt, p_col = get_metric_status(final_payout_val, is_reit, 'payout')
-            m2.metric("Yield", f"{round(div_yield_val, 2)}%")
-            m3.metric(final_payout_label, f"{round(final_payout_val, 1)}%", p_txt, delta_color=p_col, help=final_payout_help)
+            m2.metric(T['yield'], f"{round(div_yield_val, 2)}%")
+            m3.metric(final_payout_label, f"{round(final_payout_val, 1)}%", p_txt, delta_color=p_col)
         else:
-            m2.metric("Market Cap", format_large_number(mkt_cap))
+            m2.metric(T['market_cap'], format_large_number(mkt_cap))
             pm_val = safe_get(info, 'profitMargins') * 100
             pm_txt, pm_col = get_metric_status(pm_val, is_reit, 'profit_margin')
-            m3.metric("Profit Margin", f"{round(pm_val, 2)}%", pm_txt, delta_color=pm_col)
+            m3.metric(T['profit_margin'], f"{round(pm_val, 2)}%", pm_txt, delta_color=pm_col)
 
         # 52 WEEK
         h52 = safe_get(info, 'fiftyTwoWeekHigh')
@@ -659,7 +829,7 @@ if search_input:
         if h52 and l52 and price_curr:
             pct = max(0.0, min(1.0, (price_curr - l52) / (h52 - l52)))
             st.write("")
-            st.markdown("**52-Week Range**", help="Where price is vs yearly Low/High.")
+            st.markdown("**52-Week Range**", help="Low vs High")
             st.progress(pct)
             cmin, cmax = st.columns(2)
             cmin.caption(f"Low: ${l52}")
@@ -668,42 +838,41 @@ if search_input:
         st.divider()
 
         # I. PERFORMANCE
-        st.markdown("### I. Financial Performance")
+        st.markdown(f"### {T['perf_title']}")
         c1, c2, c3 = st.columns(3)
         with c1: 
             if is_reit:
-                st.markdown("##### AFFO/Share Estimate ($)", help="Rising is Good.")
+                st.markdown(f"##### {T['affo_trend']}")
                 if series_affo_share is not None: st.altair_chart(create_altair_chart(series_affo_share, "#003366"), use_container_width=True)
                 else: st.info("N/A")
             else:
-                st.markdown("##### EPS Trend ($)", help="Earnings per Share. Rising is Ideal.")
+                st.markdown(f"##### {T['eps_trend']}")
                 if hist_eps is not None: st.altair_chart(create_altair_chart(hist_eps, "#003366"), use_container_width=True)
                 else: st.info("N/A")
         with c2: 
-            metric_name = "Op. Cash Flow ($)" if is_reit else "FCF / Share ($)"
-            st.markdown(f"##### {metric_name}", help="Cash Profit.")
+            st.markdown(f"##### {T['cash_metric']}")
             if series_affo_share is not None: st.altair_chart(create_altair_chart(series_affo_share, "#4169E1"), use_container_width=True)
             else: st.info("N/A")
         with c3: 
-            st.markdown("##### Total FCF/OCF ($)", help="Total Cash Flow.")
+            st.markdown(f"##### {T['total_cash']}")
             data_to_show = h_ocf if is_reit else h_fcf
             if data_to_show is not None: st.altair_chart(create_altair_chart(data_to_show, "#708090", '$.2s'), use_container_width=True)
             else: st.info("N/A")
         st.divider()
 
         # II. STRUCTURE
-        st.markdown("### II. Structure & Safety")
+        st.markdown(f"### {T['struct_title']}")
         h1, h2, h3 = st.columns(3)
         with h1: 
-            st.markdown("##### Shares Outstanding", help="Dilution Check. Decreasing = Good.")
+            st.markdown(f"##### {T['shares']}")
             if h_shares is not None: st.altair_chart(create_altair_chart(h_shares, "#CC5500", '.2s'), use_container_width=True)
             else: st.info("N/A")
         with h2: 
-            st.markdown("##### Total Debt ($)", help="Stable or Decreasing is Ideal.")
+            st.markdown(f"##### {T['debt']}")
             if hist_debt is not None: st.altair_chart(create_altair_chart(hist_debt, "#800020", '$.2s'), use_container_width=True)
             else: st.info("N/A")
         with h3:
-            st.markdown("##### Safety Scorecard")
+            st.markdown(f"##### {T['safety_score']}")
             st.write("")
             col_s1, col_s2 = st.columns(2)
             
@@ -712,18 +881,18 @@ if search_input:
             beta_txt, beta_col = get_metric_status(beta_val, is_reit, 'beta')
             
             with col_s1:
-                st.metric("Net Debt/EBITDA", f"{round(nd_ebitda_val, 1)}x", debt_txt, delta_color=debt_col)
-                st.metric("Interest Cov.", f"{round(int_cov_val, 1)}x", int_txt, delta_color=int_col)
+                st.metric(T['net_debt'], f"{round(nd_ebitda_val, 1)}x", debt_txt, delta_color=debt_col)
+                st.metric(T['int_cov'], f"{round(int_cov_val, 1)}x", int_txt, delta_color=int_col)
             with col_s2:
                 ins_col = "normal" if insider_label == "Net Buying" else "inverse" if insider_label == "Net Selling" else "off"
-                st.metric("Insider Trend (6M)", insider_label, insider_delta_display, delta_color=ins_col)
+                st.metric(T['insider'], insider_label, insider_delta_display, delta_color=ins_col)
                 beta_fmt = f"{round(beta_val, 2)}" if beta_val else "N/A"
-                st.metric("Beta", beta_fmt, beta_txt, delta_color=beta_col)
+                st.metric(T['beta'], beta_fmt, beta_txt, delta_color=beta_col)
 
         st.divider()
 
         # III. VALUATION
-        st.markdown("### III. Valuation & Quality")
+        st.markdown(f"### {T['val_title']}")
         
         chowder_val = div_yield_val + cagr_5
         chow_txt, chow_col = get_metric_status(chowder_val, is_reit, 'chowder')
@@ -742,16 +911,16 @@ if search_input:
         r1_c1, r1_c2 = st.columns(2)
         with r1_c1:
             if has_dividends:
-                st.markdown("##### Yield History (%)", help="High historical yield usually signals undervaluation.")
+                st.markdown(f"##### {T['yield_hist']}")
                 if series_yield_history is not None: st.altair_chart(create_line_chart(series_yield_history, "#008080", '.2f'), use_container_width=True)
                 else: st.info("N/A")
             else:
-                st.markdown("##### Annual Revenue History ($)", help="Top line growth.")
+                st.markdown(f"##### {T['rev_hist']}")
                 if h_revenue is not None: st.altair_chart(create_altair_chart(h_revenue, "#B8860B", '$.2s', "Total Revenue"), use_container_width=True)
                 else: st.info("N/A")
 
         with r1_c2:
-            st.markdown("##### Gross Margin Trend (%)", help="Pricing Power.")
+            st.markdown(f"##### {T['gm_trend']}")
             if series_gross_margin is not None: 
                 st.altair_chart(create_line_chart(series_gross_margin, "#DAA520", '.1f'), use_container_width=True)
             else: st.info("N/A")
@@ -759,27 +928,27 @@ if search_input:
         r2_c1, r2_c2 = st.columns(2)
         with r2_c1:
              if has_dividends:
-                 st.markdown("##### Annual Dividend History ($)", help="Staircase Pattern = Ideal.")
+                 st.markdown(f"##### {T['div_hist']}")
                  if series_divs_history is not None: st.altair_chart(create_line_chart(series_divs_history, "#228B22", '$.2f'), use_container_width=True)
                  else: st.info("N/A")
              else:
-                 st.markdown("##### Net Income History ($)", help="Profit Growth.")
+                 st.markdown(f"##### {T['ni_hist']}")
                  if h_net_income is not None: st.altair_chart(create_altair_chart(h_net_income, "#228B22", '$.2s'), use_container_width=True)
                  else: st.info("N/A")
 
         with r2_c2:
-             st.markdown("##### Valuation & Growth Scorecard")
+             st.markdown(f"##### {T['val_score']}")
              st.write("")
              col_g1, col_g2, col_g3 = st.columns(3)
              with col_g1:
                  if has_dividends:
-                     st.metric("Div CAGR (5y)", f"{round(cagr_5, 2)}%", help="5-Year Growth Rate.")
-                     st.metric("Chowder Rule", f"{round(chowder_val, 1)}", chow_txt, delta_color=chow_col)
+                     st.metric(T['div_cagr'], f"{round(cagr_5, 2)}%")
+                     st.metric(T['chowder'], f"{round(chowder_val, 1)}", chow_txt, delta_color=chow_col)
                  else:
                      rev_growth = safe_get(info, 'revenueGrowth') * 100
-                     st.metric("Rev Growth (YoY)", f"{round(rev_growth, 2)}%")
+                     st.metric(T['rev_growth'], f"{round(rev_growth, 2)}%")
                      eps_growth = safe_get(info, 'earningsGrowth') * 100
-                     st.metric("EPS Growth (YoY)", f"{round(eps_growth, 2)}%")
+                     st.metric(T['eps_growth'], f"{round(eps_growth, 2)}%")
 
              with col_g2:
                  st.metric("ROE", roe_display, roe_txt, delta_color=roe_col)
@@ -799,7 +968,7 @@ if search_input:
              
              st.write("")
              # VISUAL MOAT CARDS
-             st.markdown("##### 🏰 Competitive Advantage (Moat)")
+             st.markdown(f"##### {T['moat_title']}")
              moat_html = f"""
              <div class="moat-container">
                 <div class="moat-card {moat_data[0][2]}"><div class="moat-label">{moat_data[0][0]}</div><div class="moat-value">{moat_data[0][1]}</div></div>
@@ -812,7 +981,7 @@ if search_input:
         st.divider()
 
         # IV. SAFETY (Conditional)
-        st.markdown("### IV. Cash Flow & Solvency Analysis")
+        st.markdown(f"### {T['safety_title']}")
         df_div_safety = pd.DataFrame()
         df_debt_safety = pd.DataFrame()
         
@@ -826,35 +995,35 @@ if search_input:
         if has_dividends:
             c_safe_1, c_safe_2 = st.columns(2)
             with c_safe_1:
-                st.markdown("##### Dividend Safety", help="Cash Flow vs Dividends.")
+                st.markdown(f"##### {T['div_safety']}")
                 if not df_div_safety.empty: st.altair_chart(create_grouped_bar_chart(df_div_safety, {'Cash Flow': '#2F4F4F', 'Dividends Paid': '#228B22'}), use_container_width=True)
                 else: st.warning("No Data")
             with c_safe_2:
-                st.markdown("##### Solvency", help="Cash Flow vs Total Debt.")
+                st.markdown(f"##### {T['solvency']}")
                 if not df_debt_safety.empty: st.altair_chart(create_grouped_bar_chart(df_debt_safety, {'Cash Flow': '#2F4F4F', 'Total Debt': '#800000'}), use_container_width=True)
                 else: st.warning("No Data")
         else:
-            st.markdown("##### Solvency")
+            st.markdown(f"##### {T['solvency']}")
             if not df_debt_safety.empty: st.altair_chart(create_grouped_bar_chart(df_debt_safety, {'Cash Flow': '#2F4F4F', 'Total Debt': '#800000'}), use_container_width=True)
             else: st.warning("No Data")
 
         st.divider()
 
         # V. ANALYST
-        st.markdown("### V. Analyst Estimates & News")
+        st.markdown(f"### {T['analyst_title']}")
         target_price = safe_get(info, 'targetMeanPrice')
         recommendation = safe_get(info, 'recommendationKey', 'N/A').title()
         col_metrics, col_news = st.columns([1, 2])
         with col_metrics:
-            st.markdown("##### Wall St. Consensus")
+            st.markdown(f"##### {T['consensus']}")
             if target_price and target_price > 0:
                 upside_pot = ((target_price - price_curr) / price_curr) * 100
-                st.metric("Avg Price Target", f"${round(target_price, 2)}", f"{round(upside_pot, 2)}%", help="Analyst Estimate.")
-            else: st.metric("Avg Price Target", "N/A")
-            st.metric("Consensus Rec.", recommendation)
+                st.metric(T['target'], f"${round(target_price, 2)}", f"{round(upside_pot, 2)}%")
+            else: st.metric(T['target'], "N/A")
+            st.metric(T['consensus'], recommendation)
 
         with col_news:
-            st.markdown("##### Latest Headlines (Google News)")
+            st.markdown(f"##### {T['news']}")
             if news_items:
                 for n in news_items: st.markdown(f"<div class='news-item'><a href='{n['link']}' class='news-link' target='_blank'>• {n['title']}</a><span class='news-meta'>{n['date']}</span></div>", unsafe_allow_html=True)
             else:
@@ -862,7 +1031,7 @@ if search_input:
                 st.markdown(f"<a href='https://finance.yahoo.com/quote/{ticker}/news' target='_blank' class='fallback-btn'>Read Full News Coverage ➔</a>", unsafe_allow_html=True)
 
         # --- AUTO SUMMARY ---
-        st.write(""); st.markdown("### 🤖 Automated Analysis")
+        st.write(""); st.markdown(f"### {T['auto_summary']}")
         bull_points, bear_points = [], []
         if pe_ratio:
             if not is_reit:
@@ -885,21 +1054,21 @@ if search_input:
         
         sc1, sc2 = st.columns(2)
         with sc1:
-            st.success("🟢 The Bull Case (Strengths)")
+            st.success(f"🟢 {T['bull']}")
             for p in bull_points: st.markdown(f"- {p}")
             if not bull_points: st.write("None.")
         with sc2:
-            st.error("🔴 The Bear Case (Risks)")
+            st.error(f"🔴 {T['bear']}")
             for p in bear_points: st.markdown(f"- {p}")
             if not bear_points: st.write("None.")
 
         # --- VI. COMPETITORS ---
-        st.divider(); st.markdown("### VI. Comparação com Competidores")
+        st.divider(); st.markdown(f"### {T['comp_title']}")
         col_comp_input, _ = st.columns([3, 1])
-        with col_comp_input: peers_input = st.text_input("Adicionar concorrentes (sep. por vírgula):", placeholder="Ex: KO, PEP, MNST")
+        with col_comp_input: peers_input = st.text_input(T['comp_input'], placeholder=T['comp_placeholder'])
         
         if peers_input:
-            with st.spinner("Comparando..."):
+            with st.spinner(f"{T['loading']}..."):
                 tickers_to_compare = [t.strip().upper() for t in peers_input.split(",") if t.strip()]
                 if ticker not in tickers_to_compare: tickers_to_compare.insert(0, ticker)
                 comp_data = []
@@ -923,39 +1092,5 @@ if search_input:
                     st.dataframe(df_comp.style.format("{:.2f}").highlight_max(subset=["Yield (%)", "ROE (%)", "Net Mg (%)"], color='#d4edda').highlight_min(subset=["P/E", "Debt/Eq", "Payout (%)"], color='#d4edda'), use_container_width=True)
                 else: st.warning("Sem dados.")
 
-        # --- VII. VALUATION LAB ---
-        st.divider(); st.markdown("### VII. Laboratório de Valuation")
-        st.caption("Estimativas simples. Não são recomendações.")
-        v1, v2 = st.columns(2)
-        with v1:
-            st.markdown("##### 🧮 Número de Graham")
-            try:
-                eps_ttm = safe_get(info, 'trailingEps')
-                bvps = safe_get(info, 'bookValue')
-                if eps_ttm > 0 and bvps > 0:
-                    gn = np.sqrt(22.5 * eps_ttm * bvps)
-                    ups = ((gn - price_curr) / price_curr) * 100
-                    st.metric("Valor Justo", f"${round(gn, 2)}")
-                    if ups > 0: st.success(f"Upside: +{round(ups, 1)}%")
-                    else: st.error(f"Sobreavaliado: {round(ups, 1)}%")
-                else: st.warning("Dados insuficientes.")
-            except: st.info("Erro Graham.")
-        with v2:
-            st.markdown("##### 📈 Gordon Growth")
-            if has_dividends:
-                try:
-                    k = 0.045 + (beta_val if beta_val else 1.0) * 0.05
-                    g = min(cagr_5/100, k - 0.01) if cagr_5 > 0 else 0.02
-                    dr = safe_get(info, 'dividendRate')
-                    if dr > 0 and k > g:
-                        fv = (dr * (1 + g)) / (k - g)
-                        ups = ((fv - price_curr) / price_curr) * 100
-                        st.metric("Valor Justo", f"${round(fv, 2)}")
-                        if ups > 0: st.success(f"Upside: +{round(ups, 1)}%")
-                        else: st.error(f"Sobreavaliado: {round(ups, 1)}%")
-                    else: st.warning("Modelo inaplicável.")
-                except: st.info("Erro Gordon.")
-            else: st.info("Apenas para pagadoras de dividendos.")
-
         st.write(""); st.write(""); st.markdown("---")
-        st.markdown("<div style='text-align: center; color: #888; font-size: 0.8rem;'>Paulo Moura Dashboard | Yahoo Finance Data</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align: center; color: #888; font-size: 0.8rem;'>{T['footer']}</div>", unsafe_allow_html=True)
