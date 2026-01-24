@@ -82,7 +82,7 @@ def get_metric_status(value, is_reit, metric_type):
     if value is None: return None, "off"
     
     if metric_type == 'payout':
-        # Para REITs, toleramos payout mais alto (até 90% do AFFO/OCF é ok)
+        # Para REITs, até 90% do AFFO/OCF é aceitável
         limit_good = 90 if is_reit else 75 
         limit_bad = 100 if is_reit else 90
         if value < limit_good: return "Safe", "normal"
@@ -343,7 +343,7 @@ if search_input:
         price_curr = fast_info.get('last_price')
         if not price_curr: price_curr = safe_get(info, 'currentPrice')
         if not price_curr and not hist_price.empty: price_curr = hist_price['Close'].iloc[-1]
-        if price_curr is None: price_curr = 0.0 # Safety net
+        if price_curr is None: price_curr = 0.0
         
         mkt_cap = fast_info.get('market_cap')
         if not mkt_cap: mkt_cap = safe_get(info, 'marketCap')
@@ -379,11 +379,9 @@ if search_input:
             
             # --- CASH METRIC LOGIC ---
             if is_reit:
-                # Para REITs, usamos OCF como "Funds From Operations" proxy
                 if df_calc['OCF'].sum() != 0: df_calc['Cash_Metric'] = df_calc['OCF']
                 else: df_calc['Cash_Metric'] = df_calc['NI'].fillna(0) + df_calc['DEPR'].fillna(0)
             else:
-                # Para outros, FCF = OCF + Capex (Capex é negativo)
                 df_calc['Cash_Metric'] = df_calc['OCF'].fillna(0) + df_calc['CAPEX'].fillna(0)
 
             if 'SHARES' in df_calc.columns:
@@ -552,18 +550,18 @@ if search_input:
             if len(clean_divs) >= 4: cagr_3 = calculate_cagr(clean_divs.iloc[-4], clean_divs.iloc[-1], 3) * 100
             if len(clean_divs) >= 6: cagr_5 = calculate_cagr(clean_divs.iloc[-6], clean_divs.iloc[-1], 5) * 100
             
-            # SUPER ROBUST PAYOUT
+            # SUPER ROBUST PAYOUT CALCULATION
             try:
+                # 1. Tentar calcular manualmente com Quarterly Cashflow (Mais Preciso)
                 if q_cashflow is not None and not q_cashflow.empty:
                     line_ocf = find_line(q_cashflow, ['operating cash flow', 'total cash from operating activities'])
                     line_capex = find_line(q_cashflow, ['capital expenditure', 'purchase of ppe'])
                     
                     if line_ocf is not None:
                         ttm_ocf = line_ocf.iloc[:4].sum()
+                        manual_cash_metric = ttm_ocf
                         
-                        if is_reit:
-                            manual_cash_metric = ttm_ocf
-                        else:
+                        if not is_reit:
                             ttm_capex = 0
                             if line_capex is not None: ttm_capex = line_capex.iloc[:4].sum() 
                             manual_cash_metric = ttm_ocf + ttm_capex
@@ -576,9 +574,11 @@ if search_input:
                             fcf_payout_ratio = (total_div_est / manual_cash_metric) * 100
             except: pass
 
+            # 2. Fallback (Info FreeCashflow ou OCF)
             if fcf_payout_ratio is None:
                 try:
                     ttm_fcf = safe_get(info, 'freeCashFlow')
+                    # Para REITs, preferimos OCF como denominador se FCF for mau
                     if is_reit:
                         ttm_ocf = safe_get(info, 'operatingCashflow')
                         if ttm_ocf: ttm_fcf = ttm_ocf
@@ -624,14 +624,26 @@ if search_input:
             final_payout_label = "Payout (FCF-TTM)"
             final_payout_help = "Dividends / Free Cash Flow. For REITs: Dividends / Operating Cash Flow."
             
+            # Prioridade 1: Calculo manual FCF/OCF (Correcto para REITs)
             if fcf_payout_ratio is not None and 0 < fcf_payout_ratio < 500:
                 final_payout_val = fcf_payout_ratio
-                if is_reit: final_payout_label = "Payout (Est. FFO)"
+                if is_reit: final_payout_label = "Payout (Est. OCF/FFO)"
+            # Prioridade 2: GAAP do Yahoo (Só usamos se não for REIT ou se manual falhar)
             else:
-                final_payout_val = safe_get(info, 'payoutRatio') * 100
-                final_payout_label = "Payout (GAAP)"
-                final_payout_help = "Earnings payout (Less reliable)."
+                payout_yahoo = safe_get(info, 'payoutRatio')
+                if payout_yahoo:
+                    final_payout_val = payout_yahoo * 100
+                    final_payout_label = "Payout (GAAP)"
+                    final_payout_help = "Earnings payout (Less reliable)."
             
+            # Se ainda estiver errado para REIT (>100% e é GAAP), forçamos recalculo aproximado
+            if is_reit and final_payout_val > 100 and "GAAP" in final_payout_label:
+                 try:
+                     # Tentativa desesperada de corrigir: Div Yield / (OCF Yield Estimate ~ 10%)
+                     # Ou apenas avisar
+                     final_payout_help += " (Warning: GAAP Payout is unreliable for REITs)"
+                 except: pass
+
             p_txt, p_col = get_metric_status(final_payout_val, is_reit, 'payout')
             m2.metric("Yield", f"{round(div_yield_val, 2)}%")
             m3.metric(final_payout_label, f"{round(final_payout_val, 1)}%", p_txt, delta_color=p_col, help=final_payout_help)
