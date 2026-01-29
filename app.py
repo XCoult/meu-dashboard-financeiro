@@ -32,7 +32,7 @@ LANG = {
         "market_cap": "Valor de Mercado",
         "yield": "Dividend Yield",
         "profit_margin": "Margem Líquida",
-        # Métricas e Gráficos
+        # Metrics
         "eps_trend": "Tendência EPS ($)",
         "affo_trend": "Tendência AFFO ($)",
         "cash_metric": "Fluxo de Caixa (Op/FCF)",
@@ -58,7 +58,14 @@ LANG = {
         "bear": "Pontos Fracos",
         "comp_title": "Comparação com Competidores",
         "comp_input": "Adicionar concorrentes (sep. por vírgula):",
-        # Novas Funcionalidades
+        # Tooltips (Explicações)
+        "help_net_debt": "Mede quantos anos a empresa demoraria a pagar a dívida com o lucro operacional (EBITDA). < 3x é ideal.",
+        "help_int_cov": "Capacidade de pagar os juros da dívida. > 3x é seguro. < 1.5x é perigoso.",
+        "help_insider": "Indica se os diretores (CEOs, CFOs) estão a comprar (confiança) ou a vender as suas próprias ações.",
+        "help_altman": "Probabilidade de falência nos próximos 2 anos.\n> 3.0: Zona Segura (Verde)\n< 1.8: Zona de Risco (Vermelho)\n(Não aplicável a Bancos e REITs)",
+        "help_solvency": "Compara o dinheiro em caixa vs a dívida total. Barras de dívida muito maiores que as de caixa indicam risco em caso de crise.",
+        "help_tech": "Linha Verde (SMA50): Média curto prazo.\nLinha Vermelha (SMA200): Média longo prazo.\n\nSinais:\n- Preço > Ambas: Tendência de alta.\n- Verde cruza Vermelha para cima (Golden Cross): Sinal de Compra.\n- Verde cruza Vermelha para baixo (Death Cross): Sinal de Venda.",
+        # Tabs & Labels
         "tab_perf": "📈 Performance",
         "tab_safe": "🛡️ Segurança",
         "tab_val": "💰 Valor & Dividendos",
@@ -110,6 +117,14 @@ LANG = {
         "bear": "Bear Case",
         "comp_title": "Competitor Comparison",
         "comp_input": "Add competitors (comma sep):",
+        # Tooltips
+        "help_net_debt": "Measures how many years it would take to pay off debt with current EBITDA. < 3x is ideal.",
+        "help_int_cov": "Ability to pay interest expenses. > 3x is safe. < 1.5x is critical.",
+        "help_insider": "Shows if company directors are buying (confidence) or selling their own shares.",
+        "help_altman": "Bankruptcy probability within 2 years.\n> 3.0: Safe Zone (Green)\n< 1.8: Distress Zone (Red)\n(Not applicable to Banks/REITs)",
+        "help_solvency": "Compares Cash on hand vs Total Debt. Debt bars much larger than cash bars indicate liquidity risk.",
+        "help_tech": "Green Line (SMA50): Short-term avg.\nRed Line (SMA200): Long-term avg.\n\nSignals:\n- Price > Both: Bullish trend.\n- Green crosses Red upward (Golden Cross): Buy Signal.\n- Green crosses Red downward (Death Cross): Sell Signal.",
+        # Tabs
         "tab_perf": "📈 Performance",
         "tab_safe": "🛡️ Safety",
         "tab_val": "💰 Value & Dividends",
@@ -161,6 +176,14 @@ LANG = {
         "bear": "Points Faibles",
         "comp_title": "Comparaison",
         "comp_input": "Comparer avec (séparé par virgule):",
+        # Tooltips
+        "help_net_debt": "Mesure le nombre d'années pour rembourser la dette avec l'EBITDA actuel. < 3x est idéal.",
+        "help_int_cov": "Capacité à payer les intérêts. > 3x est sûr. < 1.5x est critique.",
+        "help_insider": "Indique si les dirigeants achètent (confiance) ou vendent leurs propres actions.",
+        "help_altman": "Probabilité de faillite.\n> 3.0: Zone Sûre (Vert)\n< 1.8: Zone de Risque (Rouge)\n(Non applicable aux Banques/REITs)",
+        "help_solvency": "Compare la Trésorerie vs Dette Totale. Une dette bien plus élevée que le cash indique un risque.",
+        "help_tech": "Ligne Verte (SMA50): Moyenne court terme.\nLigne Rouge (SMA200): Moyenne long terme.\n\nSignaux:\n- Prix > Les deux: Tendance haussière.\n- Croix d'Or (Golden Cross): Achat.\n- Croix de la Mort (Death Cross): Vente.",
+        # Tabs
         "tab_perf": "📈 Performance",
         "tab_safe": "🛡️ Sécurité",
         "tab_val": "💰 Valeur & Dividendes",
@@ -888,14 +911,14 @@ if st.session_state.search_term:
                             f"{round(nd_ebitda_val, 1)}x", 
                             debt_txt, 
                             delta_color=debt_col,
-                            help="Mede quantos anos a empresa demoraria a pagar a dívida com o lucro atual. < 3x é ideal."
+                            help=T['help_net_debt']
                         )
                         st.metric(
                             T['int_cov'], 
                             f"{round(int_cov_val, 1)}x", 
                             int_txt, 
                             delta_color=int_col,
-                            help="Capacidade de pagar juros. > 3x é seguro. < 1.5x é perigoso."
+                            help=T['help_int_cov']
                         )
                     with col_s2:
                         ins_col = "normal" if insider_label == "Net Buying" else "inverse" if insider_label == "Net Selling" else "off"
@@ -904,7 +927,7 @@ if st.session_state.search_term:
                             insider_label, 
                             insider_delta_display, 
                             delta_color=ins_col,
-                            help="Se os diretores da empresa estão a comprar ou vender as suas próprias ações."
+                            help=T['help_insider']
                         )
                         z_delta_color = "off"
                         if z_color == "normal": z_delta_color = "normal"
@@ -913,11 +936,11 @@ if st.session_state.search_term:
                             "Altman Z-Score", 
                             z_score_txt, 
                             delta_color=z_delta_color,
-                            help="Probabilidade de falência. > 3.0 = Seguro (Verde). < 1.8 = Risco (Vermelho). Não se aplica a Bancos/REITs."
+                            help=T['help_altman']
                         )
                 
                 st.divider()
-                st.markdown(f"##### {T['solvency']} ℹ️", help="Visualiza se a empresa tem dinheiro (Caixa) suficiente para pagar as dívidas. Barras de dívida muito maiores que as de caixa indicam risco de liquidez.")
+                st.markdown(f"##### {T['solvency']} ℹ️", help=T['help_solvency'])
                 df_debt_safety = pd.DataFrame()
                 h_cash_metric_chart = h_ocf if is_reit else h_fcf
                 if h_cash_metric_chart is not None and hist_debt is not None: df_debt_safety = align_annual_data({'Cash Flow': h_cash_metric_chart, 'Total Debt': hist_debt})
@@ -981,10 +1004,7 @@ if st.session_state.search_term:
             # TAB 4: ANALYSIS
             with tab4:
                 # Technical Chart
-                st.markdown(
-                    f"##### {T['tech_chart']} ℹ️", 
-                    help="Linha Verde (SMA50): Média curto prazo.\nLinha Vermelha (SMA200): Média longo prazo.\n\nSinais:\n- Preço > Ambas: Tendência de alta.\n- Verde cruza Vermelha para cima (Golden Cross): Sinal de Compra.\n- Verde cruza Vermelha para baixo (Death Cross): Sinal de Venda."
-                )
+                st.markdown(f"##### {T['tech_chart']} ℹ️", help=T['help_tech'])
                 if not hist_price.empty: st.altair_chart(create_price_chart(hist_price), use_container_width=True)
 
                 st.divider()
