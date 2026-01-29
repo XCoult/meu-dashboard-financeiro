@@ -573,44 +573,127 @@ if st.session_state.search_term:
 
             beta_val = safe_get(info, 'beta')
 
-            # --- MOAT ---
-            moat_score = 0
+            # --- MOAT (ADVANCED LOGIC) ---
+            st.write("")
+            st.markdown(f"##### {T['moat_title']}")
+            
+            # 1. Preparação de Dados Históricos (Médias 5 Anos)
+            avg_roic = 0
+            avg_gm = 0
+            roic_trend = "Stable"
+            
+            # Calcular ROIC histórico se possível
+            if h_ebit is not None and h_equity is not None and hist_debt is not None:
+                try:
+                    # Alinha dados anuais
+                    df_roic = align_annual_data({'EBIT': h_ebit, 'Equity': h_equity, 'Debt': hist_debt, 'Cash': h_cash})
+                    if not df_roic.empty:
+                        # Invested Capital = Equity + Debt - Cash
+                        df_roic['InvCap'] = df_roic['Equity'] + df_roic['Debt'] - df_roic['Cash'].fillna(0)
+                        df_roic = df_roic[df_roic['InvCap'] > 0]
+                        df_roic['ROIC'] = (df_roic['EBIT'] / df_roic['InvCap']) * 100
+                        
+                        # Média dos últimos 5 anos (ou o que houver)
+                        recent_roic = df_roic['ROIC'].tail(5)
+                        avg_roic = recent_roic.mean()
+                        
+                        # Tendência (comparar média dos ultimos 2 vs média total)
+                        if len(recent_roic) > 2:
+                            if recent_roic.iloc[-1] > recent_roic.mean() * 1.1: roic_trend = "Rising ↗"
+                            elif recent_roic.iloc[-1] < recent_roic.mean() * 0.9: roic_trend = "Falling ↘"
+                except: pass
+
+            # Calcular Margem Bruta Média 5 Anos
+            if series_gross_margin is not None and not series_gross_margin.empty:
+                avg_gm = series_gross_margin.tail(5).mean()
+
+            # 2. Métricas Especiais (Buffett Check & FCF Conversion)
+            # SG&A vs Gross Profit (Indicador de marca forte/eficiência)
+            buffett_score_txt = "N/A"
+            buffett_class = "moat-avg"
+            try:
+                h_sga = find_line(financials, ['selling general and administrative', 'selling, general'])
+                if h_sga is not None and h_gross_profit is not None:
+                    last_sga = h_sga.iloc[0] # TTM ou ano mais recente
+                    last_gp = h_gross_profit.iloc[0]
+                    if last_gp > 0:
+                        sga_ratio = (last_sga / last_gp) * 100
+                        if sga_ratio < 30: 
+                            buffett_score_txt = f"Great ({round(sga_ratio)}%)"
+                            buffett_class = "moat-good"
+                        elif sga_ratio < 70: 
+                            buffett_score_txt = f"Good ({round(sga_ratio)}%)"
+                            buffett_class = "moat-avg"
+                        else: 
+                            buffett_score_txt = f"High ({round(sga_ratio)}%)"
+                            buffett_class = "moat-bad"
+            except: pass
+
+            # 3. Construção do Scorecard do Moat
             moat_data = [] 
             
+            # Card 1: ROIC (Eficiência de Capital)
+            # REITs usam FFO/AFFO, mas manteremos ROIC como proxy de gestão ou GM para simplicidade
             if is_reit:
-                if mkt_cap and mkt_cap > 30000000000: 
-                    moat_score+=1; moat_data.append(("Scale", "Massive Cap", "moat-good"))
-                elif mkt_cap and mkt_cap > 10000000000: moat_data.append(("Scale", "Large Cap", "moat-avg"))
-                else: moat_data.append(("Scale", "Mid/Small", "moat-bad"))
-
-                gm_val_last = series_gross_margin.iloc[-1] if series_gross_margin is not None else 0
-                if gm_val_last > 60: moat_score+=1; moat_data.append(("Efficiency", f"GM {round(gm_val_last,1)}%", "moat-good"))
-                elif gm_val_last > 40: moat_data.append(("Efficiency", f"GM {round(gm_val_last,1)}%", "moat-avg"))
-                else: moat_data.append(("Efficiency", f"GM {round(gm_val_last,1)}%", "moat-bad"))
-
-                if nd_ebitda_val < 5.5 and nd_ebitda_val > 0: moat_score+=1; moat_data.append(("Safety", f"NetDebt {round(nd_ebitda_val,1)}x", "moat-good"))
-                elif nd_ebitda_val < 6.5: moat_data.append(("Safety", f"NetDebt {round(nd_ebitda_val,1)}x", "moat-avg"))
-                else: moat_data.append(("Safety", "High Leverage", "moat-bad"))
-                moat_data.append(("Type", "REIT", "moat-avg"))
+                if avg_gm > 60: moat_data.append(("Gross Margin (5Y)", f"{round(avg_gm,1)}%", "moat-good"))
+                elif avg_gm > 40: moat_data.append(("Gross Margin (5Y)", f"{round(avg_gm,1)}%", "moat-avg"))
+                else: moat_data.append(("Gross Margin (5Y)", f"{round(avg_gm,1)}%", "moat-bad"))
             else:
-                if roic_val > 15: moat_score+=1; moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-good"))
-                elif roic_val > 8: moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-avg"))
-                else: moat_data.append(("Efficiency", f"ROIC {round(roic_val,1)}%", "moat-bad"))
-                
-                gm_val_last = series_gross_margin.iloc[-1] if series_gross_margin is not None else 0
-                if gm_val_last > 40: moat_score+=1; moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-good"))
-                elif gm_val_last > 20: moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-avg"))
-                else: moat_data.append(("Pricing", f"GM {round(gm_val_last,1)}%", "moat-bad"))
-                
-                pm_val_calc = safe_get(info, 'profitMargins') * 100
-                if pm_val_calc > 15: moat_score+=1; moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-good"))
-                elif pm_val_calc > 5: moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-avg"))
-                else: moat_data.append(("Profit", f"Net Mg {round(pm_val_calc,1)}%", "moat-bad"))
-                
-                if mkt_cap and mkt_cap > 100000000000: moat_score+=1; moat_data.append(("Scale", "Mega Cap", "moat-good"))
-                elif mkt_cap and mkt_cap > 10000000000: moat_data.append(("Scale", "Large Cap", "moat-avg"))
-                else: moat_data.append(("Scale", "Mid/Small", "moat-avg"))
+                c_roic = "moat-bad"
+                if avg_roic > 15: c_roic = "moat-good"
+                elif avg_roic > 9: c_roic = "moat-avg"
+                moat_data.append(("ROIC (5Y Avg)", f"{round(avg_roic, 1)}%", c_roic))
 
+            # Card 2: Custo de Operação (Buffett SG&A)
+            moat_data.append(("Op. Efficiency (SG&A/GP)", buffett_score_txt, buffett_class))
+
+            # Card 3: Segurança (Net Debt ou Interest Coverage)
+            if nd_ebitda_val < 2.5 and nd_ebitda_val > 0: 
+                moat_data.append(("Leverage", "Low Debt", "moat-good"))
+            elif nd_ebitda_val < 4.5: 
+                moat_data.append(("Leverage", "Moderate", "moat-avg"))
+            else: 
+                moat_data.append(("Leverage", "High Debt", "moat-bad"))
+
+            # Card 4: Dominância/Escala (Market Cap)
+            if mkt_cap > 100000000000: moat_data.append(("Scale", "Dominant", "moat-good"))
+            elif mkt_cap > 20000000000: moat_data.append(("Scale", "Large", "moat-avg"))
+            else: moat_data.append(("Scale", "Niche/Small", "moat-bad"))
+
+            # 4. Renderizar Visual
+            moat_html = f"""<div class="moat-container">
+                <div class="moat-card {moat_data[0][2]}"><div class="moat-label">{moat_data[0][0]}</div><div class="moat-value">{moat_data[0][1]}</div><div style='font-size:0.7rem; color:#888'>{roic_trend if not is_reit else ''}</div></div>
+                <div class="moat-card {moat_data[1][2]}"><div class="moat-label">{moat_data[1][0]}</div><div class="moat-value">{moat_data[1][1]}</div></div>
+                <div class="moat-card {moat_data[2][2]}"><div class="moat-label">{moat_data[2][0]}</div><div class="moat-value">{moat_data[2][1]}</div></div>
+                <div class="moat-card {moat_data[3][2]}"><div class="moat-label">{moat_data[3][0]}</div><div class="moat-value">{moat_data[3][1]}</div></div>
+             </div>"""
+            st.markdown(moat_html, unsafe_allow_html=True)
+            
+            # Barra de "Veredito Final" do Moat
+            good_count = sum(1 for x in moat_data if x[2] == 'moat-good')
+            avg_count = sum(1 for x in moat_data if x[2] == 'moat-avg')
+            total_score = (good_count * 2) + (avg_count * 1) # Max 8 pontos
+            
+            moat_verdict = "No Moat 🛡️"
+            moat_color = "#dc3545"
+            moat_width = 20
+            
+            if total_score >= 6: 
+                moat_verdict = "Wide Moat 🏰"
+                moat_color = "#28a745"
+                moat_width = 100
+            elif total_score >= 3: 
+                moat_verdict = "Narrow Moat 🏠"
+                moat_color = "#ffc107"
+                moat_width = 60
+                
+            st.markdown(f"""
+                <div style="margin-top: 10px; background-color: #f1f1f1; border-radius: 5px; height: 20px; width: 100%;">
+                    <div style="background-color: {moat_color}; width: {moat_width}%; height: 100%; border-radius: 5px; text-align: center; color: white; font-weight: bold; font-size: 0.8rem; line-height: 20px;">
+                        {moat_verdict}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
             # --- INSIDER ---
             insider_label = "Neutral"; insider_val_str = "N/A"; insider_delta_display = "No Data"; net_val_insider = 0
             try:
