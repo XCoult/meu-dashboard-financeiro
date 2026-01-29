@@ -58,6 +58,11 @@ LANG = {
         "bear": "Pontos Fracos",
         "comp_title": "Comparação com Competidores",
         "comp_input": "Adicionar concorrentes (sep. por vírgula):",
+        # Insights Contextuais
+        "insight_premium": "💎 **Prémio de Qualidade detetado:** Os modelos clássicos (Graham/Lynch) indicam que a ação está cara, mas o **ROIC elevado (>15%)** sugere uma vantagem competitiva forte. O mercado paga frequentemente múltiplos mais altos por empresas de qualidade 'Premium' (Ex: Visa, Costco) do que os modelos conservadores sugerem.",
+        "insight_growth": "🚀 **Expectativa de Crescimento:** O P/E Ratio é muito elevado. Isto significa que o preço atual reflete lucros futuros muito agressivos. Os modelos de valorização baseados no presente vão falhar aqui.",
+        "insight_value": "📉 **Possível Subavaliação:** A ação parece barata nos modelos. Verifique se os lucros são estáveis. Se estiverem a cair, pode ser uma 'Armadilha de Valor'.",
+        "insight_neutral": "⚖️ **Valorização Standard:** O preço parece alinhar-se razoavelmente com os fundamentos de crescimento e lucro atuais.",
         # Tooltips (Explicações)
         "help_net_debt": "Mede quantos anos a empresa demoraria a pagar a dívida com o lucro operacional (EBITDA). < 3x é ideal.",
         "help_int_cov": "Capacidade de pagar os juros da dívida. > 3x é seguro. < 1.5x é perigoso.",
@@ -65,6 +70,7 @@ LANG = {
         "help_altman": "Probabilidade de falência nos próximos 2 anos.\n> 3.0: Zona Segura (Verde)\n< 1.8: Zona de Risco (Vermelho)\n(Não aplicável a Bancos e REITs)",
         "help_solvency": "Compara o dinheiro em caixa vs a dívida total. Barras de dívida muito maiores que as de caixa indicam risco em caso de crise.",
         "help_tech": "Linha Verde (SMA50): Média curto prazo.\nLinha Vermelha (SMA200): Média longo prazo.\n\nSinais:\n- Preço > Ambas: Tendência de alta.\n- Verde cruza Vermelha para cima (Golden Cross): Sinal de Compra.\n- Verde cruza Vermelha para baixo (Death Cross): Sinal de Venda.",
+        "help_models": "Estes modelos foram criados para encontrar pechinchas tradicionais. Eles tendem a subavaliar empresas de tecnologia ou com fossos económicos (Moats) enormes.",
         # Tabs & Labels
         "tab_perf": "📈 Performance",
         "tab_safe": "🛡️ Segurança",
@@ -117,6 +123,11 @@ LANG = {
         "bear": "Bear Case",
         "comp_title": "Competitor Comparison",
         "comp_input": "Add competitors (comma sep):",
+        # Insights
+        "insight_premium": "💎 **Quality Premium Detected:** Classic models (Graham/Lynch) imply the stock is expensive, but high **ROIC (>15%)** suggests a strong competitive advantage. The market often pays a premium multiple for high-quality 'Compounders' (e.g., Visa, Costco).",
+        "insight_growth": "🚀 **High Growth Expectations:** The P/E Ratio is very high. This means the current price reflects aggressive future earnings. Valuation models based on present earnings will fail here.",
+        "insight_value": "📉 **Potential Undervaluation:** The stock looks cheap on models. Check if earnings are stable. If declining, it could be a 'Value Trap'.",
+        "insight_neutral": "⚖️ **Standard Valuation:** The price seems reasonably aligned with current growth and earnings fundamentals.",
         # Tooltips
         "help_net_debt": "Measures how many years it would take to pay off debt with current EBITDA. < 3x is ideal.",
         "help_int_cov": "Ability to pay interest expenses. > 3x is safe. < 1.5x is critical.",
@@ -124,6 +135,7 @@ LANG = {
         "help_altman": "Bankruptcy probability within 2 years.\n> 3.0: Safe Zone (Green)\n< 1.8: Distress Zone (Red)\n(Not applicable to Banks/REITs)",
         "help_solvency": "Compares Cash on hand vs Total Debt. Debt bars much larger than cash bars indicate liquidity risk.",
         "help_tech": "Green Line (SMA50): Short-term avg.\nRed Line (SMA200): Long-term avg.\n\nSignals:\n- Price > Both: Bullish trend.\n- Green crosses Red upward (Golden Cross): Buy Signal.\n- Green crosses Red downward (Death Cross): Sell Signal.",
+        "help_models": "These models were built to find traditional bargains. They tend to undervalue tech companies or those with massive economic Moats.",
         # Tabs
         "tab_perf": "📈 Performance",
         "tab_safe": "🛡️ Safety",
@@ -176,6 +188,11 @@ LANG = {
         "bear": "Points Faibles",
         "comp_title": "Comparaison",
         "comp_input": "Comparer avec (séparé par virgule):",
+        # Insights
+        "insight_premium": "💎 **Prime de Qualité:** Les modèles classiques indiquent que l'action est chère, mais un **ROIC élevé (>15%)** suggère un avantage concurrentiel. Le marché paie souvent plus cher pour la qualité 'Premium' (ex: Visa) que ne le suggèrent les modèles.",
+        "insight_growth": "🚀 **Attentes de Croissance:** Le P/E est très élevé. Le prix actuel reflète des bénéfices futurs agressifs.",
+        "insight_value": "📉 **Sous-évaluation Possible:** L'action semble bon marché. Vérifiez si les bénéfices sont stables. S'ils baissent, attention au 'Piège de Valeur'.",
+        "insight_neutral": "⚖️ **Valorisation Standard:** Le prix semble aligné avec les fondamentaux actuels.",
         # Tooltips
         "help_net_debt": "Mesure le nombre d'années pour rembourser la dette avec l'EBITDA actuel. < 3x est idéal.",
         "help_int_cov": "Capacité à payer les intérêts. > 3x est sûr. < 1.5x est critique.",
@@ -183,6 +200,7 @@ LANG = {
         "help_altman": "Probabilité de faillite.\n> 3.0: Zone Sûre (Vert)\n< 1.8: Zone de Risque (Rouge)\n(Non applicable aux Banques/REITs)",
         "help_solvency": "Compare la Trésorerie vs Dette Totale. Une dette bien plus élevée que le cash indique un risque.",
         "help_tech": "Ligne Verte (SMA50): Moyenne court terme.\nLigne Rouge (SMA200): Moyenne long terme.\n\nSignaux:\n- Prix > Les deux: Tendance haussière.\n- Croix d'Or (Golden Cross): Achat.\n- Croix de la Mort (Death Cross): Vente.",
+        "help_models": "Ces modèles sont conçus pour trouver des bonnes affaires traditionnelles. Ils sous-évaluent souvent la tech ou les entreprises de qualité.",
         # Tabs
         "tab_perf": "📈 Performance",
         "tab_safe": "🛡️ Sécurité",
@@ -949,12 +967,28 @@ if st.session_state.search_term:
             # TAB 3: VALUATION & DIVIDENDS
             with tab3:
                 # Fair Value
-                st.markdown(f"##### {T['fair_val_title']}")
+                st.markdown(f"##### {T['fair_val_title']} ℹ️", help=T['help_models'])
                 eps_ttm = safe_get(info, 'trailingEps')
                 growth_est = safe_get(info, 'earningsGrowth', 0.05) * 100 
                 if growth_est < 0: growth_est = 5 
                 lynch_v, graham_v = calculate_fair_value(eps_ttm, growth_est, safe_get(info, 'trailingPE'))
                 
+                # --- CONTEXTO DE VALORIZAÇÃO (NOVO) ---
+                fair_val_diff = ((graham_v - price_curr) / price_curr) * 100 if graham_v > 0 else 0
+                val_insight = T['insight_neutral'] # Default
+                
+                # Lógica de Insights
+                if pe_ratio and pe_ratio > 25 and roic_val > 15:
+                    val_insight = T['insight_premium']
+                    st.info(val_insight)
+                elif pe_ratio and pe_ratio > 50:
+                    val_insight = T['insight_growth']
+                    st.warning(val_insight)
+                elif pe_ratio and pe_ratio < 10 and roic_val < 5:
+                    val_insight = T['insight_value']
+                    st.warning(val_insight)
+                # -------------------------------------
+
                 fv_c1, fv_c2, fv_c3 = st.columns(3)
                 with fv_c1:
                     delta_l = round(((lynch_v - price_curr)/price_curr)*100, 1) if lynch_v > 0 else 0
