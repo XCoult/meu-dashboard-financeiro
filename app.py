@@ -32,7 +32,7 @@ LANG = {
         "market_cap": "Valor de Mercado",
         "yield": "Dividend Yield",
         "profit_margin": "Margem Líquida",
-        # --- Chaves Restauradas ---
+        # Métricas e Gráficos
         "eps_trend": "Tendência EPS ($)",
         "affo_trend": "Tendência AFFO ($)",
         "cash_metric": "Fluxo de Caixa (Op/FCF)",
@@ -58,7 +58,7 @@ LANG = {
         "bear": "Pontos Fracos",
         "comp_title": "Comparação com Competidores",
         "comp_input": "Adicionar concorrentes (sep. por vírgula):",
-        # --- Novas Funcionalidades ---
+        # Novas Funcionalidades
         "tab_perf": "📈 Performance",
         "tab_safe": "🛡️ Segurança",
         "tab_val": "💰 Valor & Dividendos",
@@ -174,6 +174,7 @@ LANG = {
         "footer": "Données Yahoo Finance | Usage Éducatif"
     }
 }
+
 # Definir idioma atual
 T = LANG[st.session_state.lang]
 
@@ -395,7 +396,7 @@ def create_altair_chart(data, bar_color):
         ).properties(height=220)
     except: return None
 
-def create_line_chart(data, color):
+def create_line_chart(data, color, is_percent=False):
     try:
         if data is None or data.empty: return None
         df_chart = pd.DataFrame()
@@ -406,12 +407,21 @@ def create_line_chart(data, color):
             if 'Value' not in df_chart.columns: df_chart['Value'] = df_chart.iloc[:, 0]
         df_chart = df_chart.dropna().sort_values('Year').tail(10)
         if df_chart.empty: return None
+
+        # Escala Y Personalizada (0-100% se for margem)
+        y_scale = alt.Axis(title='', format='$.2f', grid=True)
+        y_domain = alt.Undefined
+        if is_percent:
+            y_scale = alt.Axis(title='', format='.1f', grid=True)
+            max_val = df_chart['Value'].max()
+            y_domain = [0, 100] if max_val <= 100 else [0, max_val + 10]
+
         line = alt.Chart(df_chart).mark_line(color=color, strokeWidth=3).encode(
             x=alt.X('Year', axis=alt.Axis(title='', labelAngle=0)),
-            y=alt.Y('Value', axis=alt.Axis(title='', format='$.2f', grid=True))
+            y=alt.Y('Value', axis=y_scale, scale=alt.Scale(domain=y_domain))
         )
         points = alt.Chart(df_chart).mark_circle(size=80, color=color).encode(
-            x='Year', y='Value', tooltip=['Year', alt.Tooltip('Value', format='$.2f')]
+            x='Year', y='Value', tooltip=['Year', alt.Tooltip('Value', format='.1f' if is_percent else '$.2f')]
         )
         return (line + points).properties(height=220)
     except: return None
@@ -440,21 +450,63 @@ def create_price_chart(df):
         df['SMA50'] = df['Close'].rolling(window=50).mean()
         df['SMA200'] = df['Close'].rolling(window=200).mean()
         df_chart = df.reset_index().tail(500) 
-        base = alt.Chart(df_chart).encode(x=alt.X('Date:T', axis=alt.Axis(title='', labelAngle=-45)))
-        line_price = base.mark_line(color='#333', strokeWidth=2).encode(y=alt.Y('Close', axis=alt.Axis(title='Price')))
-        line_sma50 = base.mark_line(color='#2ca02c', strokeDash=[5,5], strokeWidth=1.5).encode(y='SMA50', tooltip=['SMA50'])
-        line_sma200 = base.mark_line(color='#d62728', strokeDash=[5,5], strokeWidth=1.5).encode(y='SMA200', tooltip=['SMA200'])
-        return (line_price + line_sma50 + line_sma200).properties(height=300)
+        
+        # Transformar para formato longo para permitir legendas automáticas
+        df_long = df_chart.melt('Date', value_vars=['Close', 'SMA50', 'SMA200'], var_name='Metric', value_name='Price')
+        
+        # Mapeamento de cores
+        domain = ['Close', 'SMA50', 'SMA200']
+        range_ = ['#333333', '#2ca02c', '#d62728'] # Preto, Verde, Vermelho
+
+        chart = alt.Chart(df_long).mark_line().encode(
+            x=alt.X('Date:T', axis=alt.Axis(title='', labelAngle=-45)),
+            y=alt.Y('Price', axis=alt.Axis(title='Preço ($)')),
+            color=alt.Color('Metric', scale=alt.Scale(domain=domain, range=range_), legend=alt.Legend(title="Indicadores")),
+            strokeDash=alt.condition(
+                alt.datum.Metric == 'Close',
+                alt.value([0]),     # Linha sólida para o preço
+                alt.value([5, 5])   # Tracejada para SMAs
+            ),
+            tooltip=['Date', 'Metric', alt.Tooltip('Price', format='$.2f')]
+        ).properties(height=350, title="Análise Técnica (Preço vs Médias)")
+        return chart
+    except: return None
+
+def calculate_altman_z(balance, financials, info):
+    try:
+        total_assets = find_line(balance, ['total assets'])
+        total_liab = find_line(balance, ['total liabilities', 'total debt'])
+        current_assets = find_line(balance, ['current assets', 'total current assets'])
+        current_liab = find_line(balance, ['current liabilities', 'total current liabilities'])
+        retained_earnings = find_line(balance, ['retained earnings', 'accumulated deficit'])
+        ebit = find_line(financials, ['ebit', 'operating income'])
+        revenue = find_line(financials, ['total revenue', 'operating revenue'])
+        
+        if any(x is None for x in [total_assets, total_liab, current_assets, current_liab, retained_earnings, ebit, revenue]):
+            return None
+
+        ta = total_assets.iloc[0]; tl = total_liab.iloc[0] if total_liab is not None else 0
+        ca = current_assets.iloc[0]; cl = current_liab.iloc[0]
+        re = retained_earnings.iloc[0]; ebit_val = ebit.iloc[0]; rev_val = revenue.iloc[0]
+        mkt_cap = safe_get(info, 'marketCap', 0)
+
+        if ta == 0 or tl == 0: return None
+
+        A = (ca - cl) / ta
+        B = re / ta
+        C = ebit_val / ta
+        D = mkt_cap / tl
+        E = rev_val / ta
+
+        z_score = 1.2*A + 1.4*B + 3.3*C + 0.6*D + 1.0*E
+        return z_score
     except: return None
 
 def calculate_fair_value(eps, growth_rate, pe_ratio):
     try:
-        # Peter Lynch (PEG=1 simplificado)
         lynch_value = 0
         if growth_rate > 0 and eps > 0:
             lynch_value = eps * (growth_rate if growth_rate < 25 else 25) 
-        
-        # Ben Graham (Formula: EPS * (7 + 1.5g)) - adaptada
         graham_value = 0
         if eps > 0 and growth_rate > 0:
              graham_value = eps * (7 + 1.5 * growth_rate)
@@ -617,6 +669,16 @@ if st.session_state.search_term:
                     elif net_val_insider < 0: insider_label = "Net Selling"; insider_val_str = format_large_number(net_val_insider).replace("-", "") 
                     insider_delta_display = f"{buy_count} Buys / {sell_count} Sells"
             except: pass
+
+            # --- ALTMAN Z ---
+            z_score_val = calculate_altman_z(balance, financials, info)
+            z_score_txt = "N/A"; z_color = "off"
+            if z_score_val is not None and not is_reit and 'financial' not in sector:
+                z_score_txt = f"{round(z_score_val, 2)}"
+                if z_score_val > 3.0: z_color = "normal" 
+                elif z_score_val < 1.8: z_color = "inverse"
+            elif is_reit or 'financial' in sector:
+                z_score_txt = "N/A (Setor)"
 
             # --- DIVIDENDS & PAYOUT ---
             cagr_3, cagr_5 = 0, 0
@@ -800,7 +862,7 @@ if st.session_state.search_term:
                 r2_c1, r2_c2 = st.columns(2)
                 with r2_c1:
                      st.markdown(f"##### {T['gm_trend']}")
-                     if series_gross_margin is not None: st.altair_chart(create_line_chart(series_gross_margin, "#DAA520"), use_container_width=True)
+                     if series_gross_margin is not None: st.altair_chart(create_line_chart(series_gross_margin, "#DAA520", is_percent=True), use_container_width=True)
                 with r2_c2:
                      st.markdown(f"##### {T['ni_hist']}")
                      if h_net_income is not None: st.altair_chart(create_altair_chart(h_net_income, "#228B22"), use_container_width=True)
@@ -819,16 +881,43 @@ if st.session_state.search_term:
                     col_s1, col_s2 = st.columns(2)
                     debt_txt, debt_col = get_metric_status(nd_ebitda_val, is_reit, 'net_debt_ebitda')
                     int_txt, int_col = get_metric_status(int_cov_val, is_reit, 'int_cov')
+                    
                     with col_s1:
-                        st.metric(T['net_debt'], f"{round(nd_ebitda_val, 1)}x", debt_txt, delta_color=debt_col)
-                        st.metric(T['int_cov'], f"{round(int_cov_val, 1)}x", int_txt, delta_color=int_col)
+                        st.metric(
+                            T['net_debt'], 
+                            f"{round(nd_ebitda_val, 1)}x", 
+                            debt_txt, 
+                            delta_color=debt_col,
+                            help="Mede quantos anos a empresa demoraria a pagar a dívida com o lucro atual. < 3x é ideal."
+                        )
+                        st.metric(
+                            T['int_cov'], 
+                            f"{round(int_cov_val, 1)}x", 
+                            int_txt, 
+                            delta_color=int_col,
+                            help="Capacidade de pagar juros. > 3x é seguro. < 1.5x é perigoso."
+                        )
                     with col_s2:
                         ins_col = "normal" if insider_label == "Net Buying" else "inverse" if insider_label == "Net Selling" else "off"
-                        st.metric(T['insider'], insider_label, insider_delta_display, delta_color=ins_col)
-                        st.metric("Altman Z", "N/A") # Placeholder
+                        st.metric(
+                            T['insider'], 
+                            insider_label, 
+                            insider_delta_display, 
+                            delta_color=ins_col,
+                            help="Se os diretores da empresa estão a comprar ou vender as suas próprias ações."
+                        )
+                        z_delta_color = "off"
+                        if z_color == "normal": z_delta_color = "normal"
+                        elif z_color == "inverse": z_delta_color = "inverse"
+                        st.metric(
+                            "Altman Z-Score", 
+                            z_score_txt, 
+                            delta_color=z_delta_color,
+                            help="Probabilidade de falência. > 3.0 = Seguro (Verde). < 1.8 = Risco (Vermelho). Não se aplica a Bancos/REITs."
+                        )
                 
                 st.divider()
-                st.markdown(f"##### {T['solvency']}")
+                st.markdown(f"##### {T['solvency']} ℹ️", help="Visualiza se a empresa tem dinheiro (Caixa) suficiente para pagar as dívidas. Barras de dívida muito maiores que as de caixa indicam risco de liquidez.")
                 df_debt_safety = pd.DataFrame()
                 h_cash_metric_chart = h_ocf if is_reit else h_fcf
                 if h_cash_metric_chart is not None and hist_debt is not None: df_debt_safety = align_annual_data({'Cash Flow': h_cash_metric_chart, 'Total Debt': hist_debt})
@@ -892,7 +981,10 @@ if st.session_state.search_term:
             # TAB 4: ANALYSIS
             with tab4:
                 # Technical Chart
-                st.markdown(f"##### {T['tech_chart']}")
+                st.markdown(
+                    f"##### {T['tech_chart']} ℹ️", 
+                    help="Linha Verde (SMA50): Média curto prazo.\nLinha Vermelha (SMA200): Média longo prazo.\n\nSinais:\n- Preço > Ambas: Tendência de alta.\n- Verde cruza Vermelha para cima (Golden Cross): Sinal de Compra.\n- Verde cruza Vermelha para baixo (Death Cross): Sinal de Venda."
+                )
                 if not hist_price.empty: st.altair_chart(create_price_chart(hist_price), use_container_width=True)
 
                 st.divider()
